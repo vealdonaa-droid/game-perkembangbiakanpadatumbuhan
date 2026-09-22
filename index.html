@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Petualangan Mario - Perkembangbiakan Tumbuhan</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
+    background: #000;
+    user-select: none;
+  }
+  #game-wrap {
+    position: relative;
+    width: 100vw; height: 100vh;
+    max-width: 480px;
+    margin: 0 auto;
+    background: linear-gradient(#5c94fc 0%, #8fc9ff 60%, #cfeaff 100%);
+    overflow: hidden;
+  }
+
+  /* ====== SKY ====== */
+  .cloud {
+    position: absolute; background: #fff; border-radius: 50%;
+    opacity: .9; box-shadow: 0 6px 0 rgba(0,0,0,.06);
+  }
+  .cloud::before, .cloud::after {
+    content:''; position:absolute; background:#fff; border-radius:50%;
+  }
+  .cloud::before { width:60%; height:120%; top:-40%; left:10%; }
+  .cloud::after  { width:50%; height:100%; top:-30%; right:10%; }
+  .c1 { width:70px; height:26px; top:8%; left:-100px; animation: drift 38s linear infinite; }
+  .c2 { width:50px; height:20px; top:20%; left:-100px; animation: drift 55s linear infinite 6s; }
+  .c3 { width:90px; height:32px; top:4%; left:-100px; animation: drift 70s linear infinite 12s; }
+  @keyframes drift { from{transform:translateX(0)} to{transform:translateX(600px)} }
+
+  /* ====== WORLD / CAMERA ====== */
+  /* Layer world bergerak untuk mensimulasikan kamera mengikuti Mario */
+  #world {
+    position: absolute; left: 0; bottom: 0; width: 100%; height: 100%;
+  }
+  #camera {
+    position:absolute; left:0; bottom:0; width:100%; height:100%;
+    will-change: transform;
+  }
+  #ground {
+    position: absolute; bottom: 0; left: -2000px; width: 8000px; height: 90px;
+    background: repeating-linear-gradient(90deg,#7a4a1e 0 40px,#8b5a2b 40px 80px);
+    border-top: 10px solid #3fa33f;
+    box-shadow: inset 0 6px 0 rgba(255,255,255,.15);
+  }
+  #ground::after {
+    content:''; position:absolute; top:0; left:0; width:100%; height:10px;
+    background: repeating-linear-gradient(90deg,#4cc44c 0 10px,#3fa33f 10px 20px);
+  }
+  .hill {
+    position:absolute; bottom:80px; border-radius:50% 50% 0 0;
+    background:#2e8b2e; opacity:.55;
+  }
+  .h1 { width:180px; height:100px; left:200px; }
+  .h2 { width:130px; height:70px; left:900px; background:#3aa03a; }
+  .h3 { width:220px; height:120px; left:1800px; background:#2a7d2a; }
+  .h4 { width:160px; height:90px; left:2800px; background:#3aa03a; }
+  .h5 { width:200px; height:110px; left:3800px; background:#2e8b2e; }
+
+  /* ====== MARIO (sticky di kiri layar) ====== */
+  #mario {
+    position:absolute; left:60px; bottom:80px; width:56px; height:80px;
+    transform-style: preserve-3d;
+    filter: drop-shadow(0 8px 6px rgba(0,0,0,.35));
+    z-index: 20;
+    transform-origin: center bottom;
+  }
+  .m-body {
+    position:absolute; left:8px; bottom:0; width:40px; height:44px;
+    background: radial-gradient(circle at 35% 25%, #4a7dff, #1e4fd6);
+    border-radius: 40% 40% 30% 30% / 35% 35% 45% 45%;
+    box-shadow: inset -4px -6px 0 rgba(0,0,0,.2), inset 4px 4px 0 rgba(255,255,255,.25);
+  }
+  .m-overall {
+    position:absolute; left:8px; bottom:0; width:40px; height:18px;
+    background: linear-gradient(#2f5fd0,#1b3fa0);
+    border-radius: 40% 40% 40% 40% / 60% 60% 40% 40%;
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,.3);
+  }
+  .m-leg {
+    position:absolute; bottom:-4px; width:14px; height:16px;
+    background: radial-gradient(circle at 40% 30%, #3a66dd, #17307a);
+    border-radius: 40% 40% 45% 45%;
+  }
+  .m-leg.l { left:10px; animation: legA .35s ease-in-out infinite; }
+  .m-leg.r { left:26px; animation: legB .35s ease-in-out infinite; }
+  @keyframes legA { 0%,100%{transform:translateY(0) rotate(0)} 50%{transform:translateY(-4px) rotate(12deg)} }
+  @keyframes legB { 0%,100%{transform:translateY(-4px) rotate(-12deg)} 50%{transform:translateY(0) rotate(0)} }
+  .m-head {
+    position:absolute; left:4px; top:6px; width:48px; height:40px;
+    background: radial-gradient(circle at 38% 30%, #ffd9a8, #f0b878);
+    border-radius: 50% 50% 45% 45% / 55% 55% 45% 45%;
+    box-shadow: inset -3px -4px 0 rgba(0,0,0,.12), inset 3px 3px 0 rgba(255,255,255,.35);
+  }
+  .m-hat {
+    position:absolute; left:0; top:0; width:56px; height:20px;
+    background: radial-gradient(circle at 40% 30%, #ff5a4d, #cc1f14);
+    border-radius: 50% 50% 20% 20% / 100% 100% 10% 10%;
+    box-shadow: inset -3px -4px 0 rgba(0,0,0,.25), 0 3px 0 rgba(0,0,0,.15);
+    z-index:3;
+  }
+  .m-hat::after {
+    content:''; position:absolute; left:14px; top:-2px; width:28px; height:14px;
+    background:#cc1f14; border-radius:50%;
+  }
+  .m-brim {
+    position:absolute; left:-6px; top:14px; width:36px; height:8px;
+    background: radial-gradient(circle at 40% 30%, #ff5a4d, #b81a10);
+    border-radius: 40% 40% 50% 50%;
+    z-index:4; box-shadow: 0 2px 0 rgba(0,0,0,.2);
+  }
+  .m-eye {
+    position:absolute; width:9px; height:11px; background:#fff; border-radius:50%;
+    top:18px; z-index:5;
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,.1);
+  }
+  .m-eye.l { left:14px; }
+  .m-eye.r { left:31px; }
+  .m-eye::after {
+    content:''; position:absolute; width:5px; height:6px; background:#1a1a2e;
+    border-radius:50%; bottom:1px; left:2px;
+  }
+  .m-must {
+    position:absolute; top:30px; width:18px; height:7px; background:#3a2410;
+    border-radius: 40% 40% 60% 60%; z-index:5;
+  }
+  .m-must.l { left:12px; }
+  .m-must.r { left:28px; }
+  .m-nose {
+    position:absolute; top:26px; left:24px; width:9px; height:8px;
+    background:#f0a878; border-radius:50%; z-index:5;
+    box-shadow: inset -2px -2px 0 rgba(0,0,0,.15);
+  }
+
+  /* ====== ANIMASI MARIO ====== */
+  /* Berjalan: badan naik-turun */
+  #mario.walking { animation: marioWalk .3s ease-in-out infinite; }
+  @keyframes marioWalk {
+    0%,100% { transform: translateY(0) rotate(-2deg); }
+    50%     { transform: translateY(-5px) rotate(2deg); }
+  }
+  /* Melompat busur */
+  #mario.jumping { animation: marioJump .75s cubic-bezier(.35,.05,.35,1) forwards; }
+  @keyframes marioJump {
+    0%   { transform: translateY(0) scale(1) rotate(0deg); }
+    20%  { transform: translateY(-30px) scale(1.05) rotate(-6deg); }
+    50%  { transform: translateY(-95px) scale(1.12) rotate(0deg); }
+    75%  { transform: translateY(-45px) scale(1.05) rotate(6deg); }
+    100% { transform: translateY(0) scale(.92) rotate(0deg); }
+  }
+  /* Menginjak: badan gepeng sebentar */
+  #mario.stomp { animation: marioStomp .18s ease-out; }
+  @keyframes marioStomp {
+    0%   { transform: translateY(0) scale(1.12,.85); }
+    60%  { transform: translateY(0) scale(1.05,.95); }
+    100% { transform: translateY(0) scale(1,1); }
+  }
+
+  /* ====== KOTAK PERTANYAAN ====== */
+  #boxes-layer {
+    position:absolute; left:0; bottom:80px; width:100%; height:200px;
+  }
+  .qbox {
+    position:absolute; bottom:0; width:48px; height:48px;
+    background: linear-gradient(#ffe066,#f2a71b);
+    border: 3px solid #a86a10;
+    border-radius: 8px;
+    display:flex; align-items:center; justify-content:center;
+    font-size: 24px; font-weight: 900; color:#8a4b00;
+    text-shadow: 0 1px 0 #fff6c9;
+    box-shadow: 0 6px 0 #b3740f, inset 0 3px 0 rgba(255,255,255,.6), inset 0 -4px 0 rgba(0,0,0,.15);
+    animation: boxFloat 2s ease-in-out infinite;
+    z-index: 4;
+    transition: transform .1s;
+  }
+  .qbox::before {
+    content:''; position:absolute; inset:4px; border-radius:5px;
+    border: 2px dashed rgba(168,106,16,.4);
+  }
+  /* efek terinjak */
+  .qbox.stomped {
+    animation: none;
+    transform: translateY(6px) scale(1.05,.7);
+    box-shadow: 0 1px 0 #b3740f, inset 0 3px 0 rgba(255,255,255,.6);
+  }
+  .qbox.done {
+    background: linear-gradient(#9fe6a0,#3fa33f);
+    border-color:#1e6b1e; color:#0c3d0c;
+    box-shadow: 0 6px 0 #1e6b1e, inset 0 3px 0 rgba(255,255,255,.5);
+    animation: none;
+  }
+  .qbox.done::after { content:'✔'; font-size:22px; }
+  @keyframes boxFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+
+  /* partikel bintang saat menginjak */
+  .pop-particle {
+    position:absolute; font-size:16px; pointer-events:none; z-index:30;
+    animation: popOut .6s ease-out forwards;
+  }
+  @keyframes popOut {
+    0%   { transform: translate(0,0) scale(.5); opacity:1; }
+    100% { transform: translate(var(--dx), var(--dy)) scale(1.4); opacity:0; }
+  }
+
+  /* ====== HUD ====== */
+  #hud {
+    position:absolute; top:0; left:0; width:100%; padding:10px 12px;
+    display:flex; justify-content:space-between; align-items:center;
+    z-index: 50; pointer-events:none;
+  }
+  .hearts { display:flex; gap:6px; }
+  .heart {
+    width:26px; height:26px; position:relative;
+    filter: drop-shadow(0 2px 0 rgba(0,0,0,.25));
+    transition: transform .15s;
+  }
+  .heart svg { width:100%; height:100%; }
+  .heart.broken { animation: heartBreak .5s forwards; }
+  @keyframes heartBreak {
+    0%{transform:scale(1)}
+    30%{transform:scale(1.4) rotate(-10deg)}
+    100%{transform:scale(.6); opacity:.25; filter:grayscale(1)}
+  }
+  #timer-box {
+    background: rgba(0,0,0,.45); color:#fff; padding:6px 14px;
+    border-radius: 20px; font-weight:bold; font-size:16px;
+    border: 2px solid rgba(255,255,255,.4);
+    font-variant-numeric: tabular-nums;
+    transition: color .2s, background .2s;
+  }
+  #timer-box.warn { background:#c0392b; animation: pulse .6s infinite; }
+  @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
+  #score-box {
+    background: rgba(0,0,0,.45); color:#ffe066; padding:6px 12px;
+    border-radius: 20px; font-weight:bold; font-size:14px;
+    border: 2px solid rgba(255,255,255,.4);
+  }
+
+  /* ====== START SCREEN ====== */
+  #start-screen {
+    position:absolute; inset:0; z-index:200;
+    background: linear-gradient(160deg, #1b2a6b, #3d1e6d 60%, #6b1f4d);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding: 24px; text-align:center; color:#fff;
+    transition: opacity .4s, visibility .4s;
+  }
+  #start-screen.hide { opacity:0; visibility:hidden; }
+  .title-clay {
+    font-size: 30px; font-weight: 900; line-height:1.15;
+    color:#ffe066;
+    text-shadow: 0 3px 0 #b3740f, 0 6px 12px rgba(0,0,0,.5);
+    margin-bottom: 6px;
+    letter-spacing: .5px;
+  }
+  .subtitle { font-size: 14px; color:#cfe0ff; margin-bottom: 22px; line-height:1.4; }
+  .mario-preview {
+    width: 110px; height: 140px; position:relative; margin-bottom: 18px;
+    animation: marioWalk .6s ease-in-out infinite;
+    filter: drop-shadow(0 12px 10px rgba(0,0,0,.5));
+  }
+  .mario-preview .m-body{ left:26px; width:56px; height:60px; }
+  .mario-preview .m-overall{ left:26px; width:56px; height:24px; }
+  .mario-preview .m-leg{ width:20px; height:22px; }
+  .mario-preview .m-leg.l{ left:30px; } .mario-preview .m-leg.r{ left:56px; }
+  .mario-preview .m-head{ left:20px; top:10px; width:68px; height:56px; }
+  .mario-preview .m-hat{ width:78px; height:28px; }
+  .mario-preview .m-hat::after{ left:20px; width:38px; height:20px; }
+  .mario-preview .m-brim{ left:-8px; top:20px; width:50px; height:11px; }
+  .mario-preview .m-eye{ width:13px; height:15px; top:24px; }
+  .mario-preview .m-eye.l{ left:20px; } .mario-preview .m-eye.r{ left:44px; }
+  .mario-preview .m-eye::after{ width:7px; height:9px; }
+  .mario-preview .m-must{ top:42px; width:25px; height:10px; }
+  .mario-preview .m-must.l{ left:17px; } .mario-preview .m-must.r{ left:40px; }
+  .mario-preview .m-nose{ top:36px; left:34px; width:12px; height:11px; }
+
+  #btn-start {
+    background: linear-gradient(#ff5a4d,#cc1f14);
+    color:#fff; border:none; padding: 18px 48px;
+    font-size: 22px; font-weight: 900; letter-spacing: 2px;
+    border-radius: 50px; cursor:pointer;
+    box-shadow: 0 8px 0 #7a0f08, 0 12px 20px rgba(0,0,0,.4);
+    transition: transform .1s, box-shadow .1s;
+    text-transform: uppercase;
+  }
+  #btn-start:active {
+    transform: translateY(6px);
+    box-shadow: 0 2px 0 #7a0f08, 0 4px 10px rgba(0,0,0,.4);
+  }
+  .hint { font-size:11px; color:#9fb4e0; margin-top:16px; line-height:1.5; }
+
+  /* ====== QUESTION MODAL ====== */
+  #qmodal {
+    position:absolute; inset:0; z-index:300;
+    background: rgba(10,15,40,.85);
+    display:flex; align-items:center; justify-content:center;
+    padding: 18px; opacity:0; visibility:hidden;
+    transition: opacity .25s, visibility .25s;
+  }
+  #qmodal.show { opacity:1; visibility:visible; }
+  .qcard {
+    width:100%; max-width: 380px;
+    background: linear-gradient(#fffdf5,#ffe9c9);
+    border-radius: 22px; padding: 22px 18px 18px;
+    box-shadow: 0 14px 0 #b3740f, 0 20px 40px rgba(0,0,0,.5);
+    border: 4px solid #f2a71b;
+    transform: translateY(20px) scale(.95);
+    transition: transform .25s;
+    position:relative;
+  }
+  #qmodal.show .qcard { transform: translateY(0) scale(1); }
+  .qcard .qnum {
+    position:absolute; top:-16px; left:50%; transform:translateX(-50%);
+    background:#cc1f14; color:#fff; font-weight:900; font-size:13px;
+    padding: 6px 18px; border-radius: 20px;
+    box-shadow: 0 4px 0 #7a0f08;
+    white-space: nowrap;
+  }
+  .qcard .qtext {
+    font-size: 16px; font-weight: 700; color:#3a2410; line-height:1.4;
+    margin: 14px 0 16px; text-align:left;
+  }
+  .answers { display:flex; flex-direction:column; gap:10px; }
+  .ans-btn {
+    background: #fff; border: 3px solid #f2a71b; border-radius: 14px;
+    padding: 13px 14px; font-size: 15px; font-weight: 700;
+    color:#3a2410; cursor:pointer; text-align:left;
+    box-shadow: 0 5px 0 #d98e0c;
+    transition: transform .08s, box-shadow .08s, background .2s;
+    display:flex; align-items:center; gap:10px;
+    font-family: inherit;
+  }
+  .ans-btn:active { transform: translateY(4px); box-shadow: 0 1px 0 #d98e0c; }
+  .ans-btn .lbl {
+    flex:0 0 26px; height:26px; border-radius:50%;
+    background:#f2a71b; color:#fff; font-weight:900;
+    display:flex; align-items:center; justify-content:center; font-size:13px;
+  }
+  .ans-btn.correct { background:#b6f0b6; border-color:#3fa33f; box-shadow:0 5px 0 #1e6b1e; }
+  .ans-btn.wrong { background:#ffb3b3; border-color:#cc1f14; box-shadow:0 5px 0 #7a0f08; }
+  .ans-btn:disabled { cursor: default; }
+  .feedback {
+    text-align:center; font-weight:900; font-size:15px; margin-top:14px;
+    min-height: 20px; letter-spacing:.5px;
+  }
+  .feedback.ok { color:#1e6b1e; }
+  .feedback.no { color:#cc1f14; }
+
+  /* ====== END SCREEN ====== */
+  #end-screen {
+    position:absolute; inset:0; z-index:400;
+    background: radial-gradient(circle at 50% 30%, #2a1a5e, #0d0726);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding: 24px; text-align:center; color:#fff;
+    opacity:0; visibility:hidden; transition: opacity .5s, visibility .5s;
+  }
+  #end-screen.show { opacity:1; visibility:visible; }
+  .trophy {
+    width: 140px; height: 150px; position:relative; margin-bottom: 14px;
+    animation: trophyIn 1s cubic-bezier(.2,1.6,.4,1) both;
+    filter: drop-shadow(0 0 24px rgba(255,215,0,.7));
+  }
+  @keyframes trophyIn {
+    0%{transform:scale(0) rotate(-180deg); opacity:0;}
+    100%{transform:scale(1) rotate(0); opacity:1;}
+  }
+  .trophy svg { width:100%; height:100%; }
+  .end-title { font-size: 28px; font-weight:900; color:#ffe066; text-shadow:0 3px 0 #b3740f; margin-bottom:8px; }
+  .end-stats { font-size: 15px; color:#cfe0ff; margin-bottom: 6px; line-height:1.6; }
+  .stars { font-size: 30px; margin: 8px 0 16px; letter-spacing: 6px; }
+  #btn-restart {
+    background: linear-gradient(#4a7dff,#1e4fd6);
+    color:#fff; border:none; padding: 15px 40px;
+    font-size: 18px; font-weight: 900; letter-spacing:1px;
+    border-radius: 50px; cursor:pointer; margin-top: 10px;
+    box-shadow: 0 7px 0 #102a7a, 0 10px 20px rgba(0,0,0,.4);
+    transition: transform .1s;
+    text-transform: uppercase;
+  }
+  #btn-restart:active { transform: translateY(5px); box-shadow: 0 2px 0 #102a7a; }
+
+  #toast {
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) scale(0);
+    background: rgba(0,0,0,.8); color:#fff; padding:16px 28px;
+    border-radius:16px; font-weight:900; font-size:18px; z-index:500;
+    pointer-events:none; opacity:0; transition: opacity .2s, transform .2s;
+    text-align:center;
+  }
+  #toast.show { opacity:1; transform:translate(-50%,-50%) scale(1); }
+  #toast.no { background:#cc1f14; }
+
+  .screen-flash {
+    position:absolute; inset:0; background:#fff; opacity:0;
+    pointer-events:none; z-index:450;
+  }
+  .screen-flash.flash { animation: flashAnim .35s; }
+  @keyframes flashAnim { 0%{opacity:.7} 100%{opacity:0} }
+
+  .confetti {
+    position:absolute; width:10px; height:16px; top:-20px;
+    animation: fall linear forwards; z-index:1; border-radius:2px;
+  }
+  @keyframes fall {
+    to { transform: translateY(110vh) rotate(720deg); opacity:.2; }
+  }
+</style>
+</head>
+<body>
+<div id="game-wrap">
+
+  <!-- SKY -->
+  <div class="cloud c1"></div>
+  <div class="cloud c2"></div>
+  <div class="cloud c3"></div>
+
+  <!-- WORLD dengan kamera -->
+  <div id="world">
+    <div id="camera">
+      <div class="hill h1"></div>
+      <div class="hill h2"></div>
+      <div class="hill h3"></div>
+      <div class="hill h4"></div>
+      <div class="hill h5"></div>
+      <div id="ground"></div>
+      <div id="boxes-layer"></div>
+    </div>
+  </div>
+
+  <!-- MARIO (sticky, di luar kamera) -->
+  <div id="mario">
+    <div class="m-hat"></div>
+    <div class="m-brim"></div>
+    <div class="m-head">
+      <div class="m-eye l"></div>
+      <div class="m-eye r"></div>
+      <div class="m-nose"></div>
+      <div class="m-must l"></div>
+      <div class="m-must r"></div>
+    </div>
+    <div class="m-body"></div>
+    <div class="m-overall"></div>
+    <div class="m-leg l"></div>
+    <div class="m-leg r"></div>
+  </div>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div class="hearts" id="hearts"></div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <div id="score-box">⭐ 0/20</div>
+      <div id="timer-box">⏱ 180</div>
+    </div>
+  </div>
+
+  <!-- START SCREEN -->
+  <div id="start-screen">
+    <div class="mario-preview" id="previewMario">
+      <div class="m-hat"></div>
+      <div class="m-brim"></div>
+      <div class="m-head">
+        <div class="m-eye l"></div>
+        <div class="m-eye r"></div>
+        <div class="m-nose"></div>
+        <div class="m-must l"></div>
+        <div class="m-must r"></div>
+      </div>
+      <div class="m-body"></div>
+      <div class="m-overall"></div>
+      <div class="m-leg l"></div>
+      <div class="m-leg r"></div>
+    </div>
+    <div class="title-clay">PETUALANGAN MARIO</div>
+    <div class="subtitle">🔬 Perkembangbiakan pada Tumbuhan<br>IPA — SMP</div>
+    <button id="btn-start">▶ MULAI</button>
+    <div class="hint">
+      ❤️ 3 Nyawa &nbsp;|&nbsp; ⏱ 180 Detik &nbsp;|&nbsp; 📦 20 Kotak Soal<br>
+      Mario akan berlari, melompat, dan MENGINJAK kotak pertanyaan!
+    </div>
+  </div>
+
+  <!-- QUESTION MODAL -->
+  <div id="qmodal">
+    <div class="qcard">
+      <div class="qnum" id="qnum">SOAL 1/20</div>
+      <div class="qtext" id="qtext">Pertanyaan...</div>
+      <div class="answers" id="answers"></div>
+      <div class="feedback" id="feedback"></div>
+    </div>
+  </div>
+
+  <!-- END SCREEN -->
+  <div id="end-screen">
+    <div class="trophy" id="trophy">
+      <svg viewBox="0 0 120 130">
+        <defs>
+          <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#fff3a0"/>
+            <stop offset="40%" stop-color="#ffd93b"/>
+            <stop offset="100%" stop-color="#c99700"/>
+          </linearGradient>
+          <linearGradient id="gold2" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#ffe066"/>
+            <stop offset="100%" stop-color="#a87800"/>
+          </linearGradient>
+        </defs>
+        <path d="M30 15 H90 V45 C90 70 75 82 60 82 C45 82 30 70 30 45 Z" fill="url(#gold)" stroke="#8a6400" stroke-width="3"/>
+        <path d="M30 22 C10 22 8 50 30 52" fill="none" stroke="url(#gold2)" stroke-width="7" stroke-linecap="round"/>
+        <path d="M90 22 C110 22 112 50 90 52" fill="none" stroke="url(#gold2)" stroke-width="7" stroke-linecap="round"/>
+        <rect x="54" y="80" width="12" height="18" fill="url(#gold2)" stroke="#8a6400" stroke-width="2"/>
+        <rect x="34" y="96" width="52" height="10" rx="3" fill="url(#gold)" stroke="#8a6400" stroke-width="2"/>
+        <rect x="26" y="106" width="68" height="12" rx="4" fill="url(#gold2)" stroke="#8a6400" stroke-width="3"/>
+        <path d="M60 34 l4 9 10 1 -7 7 2 10 -9 -5 -9 5 2 -10 -7 -7 10 -1 z" fill="#fff6c9" opacity=".9"/>
+        <ellipse cx="46" cy="34" rx="6" ry="10" fill="#fff" opacity=".35"/>
+      </svg>
+    </div>
+    <div class="end-title" id="endTitle">SELAMAT!</div>
+    <div class="stars" id="endStars">⭐⭐⭐</div>
+    <div class="end-stats" id="endStats"></div>
+    <button id="btn-restart">🔄 MAIN LAGI</button>
+  </div>
+
+  <div id="toast"></div>
+  <div class="screen-flash" id="flash"></div>
+</div>
+
+<script>
+/* ============================================================
+   DATA SOAL
+   ============================================================ */
+const QUESTIONS = [
+  { type:'pg', q:'Perkembangbiakan tumbuhan yang terjadi tanpa melalui perkawinan disebut...',
+    opts:['Generatif','Vegetatif','Fotosintesis','Respirasi'], ans:1 },
+  { type:'bs', q:'Perkembangbiakan generatif pada tumbuhan terjadi melalui proses penyerbukan.',
+    opts:['Benar','Salah'], ans:0 },
+  { type:'pg', q:'Alat perkembangbiakan generatif pada tumbuhan adalah...',
+    opts:['Akar','Daun','Bunga','Batang'], ans:2 },
+  { type:'bs', q:'Proses menempelnya serbuk sari ke kepala putik disebut pembuahan.',
+    opts:['Benar','Salah'], ans:1 },
+  { type:'pg', q:'Perkembangbiakan dengan cara menanam bagian batang yang mengandung mata tunas disebut...',
+    opts:['Cangkok','Stek batang','Tunas','Okulasi'], ans:1 },
+  { type:'pg', q:'Contoh tumbuhan yang berkembang biak dengan umbi lapis adalah...',
+    opts:['Kentang','Bawang merah','Jahe','Wortel'], ans:1 },
+  { type:'bs', q:'Jahe dan kunyit berkembang biak dengan akar tinggal (rizoma).',
+    opts:['Benar','Salah'], ans:0 },
+  { type:'pg', q:'Perkembangbiakan dengan cara mengupas kulit batang lalu membungkusnya dengan tanah disebut...',
+    opts:['Stek','Cangkok','Merunduk','Tunas'], ans:1 },
+  { type:'bs', q:'Pisang berkembang biak dengan tunas adventif pada buahnya.',
+    opts:['Benar','Salah'], ans:1 },
+  { type:'pg', q:'Berikut ini yang merupakan perkembangbiakan vegetatif buatan adalah...',
+    opts:['Tunas','Umbi lapis','Cangkok','Spora'], ans:2 },
+  { type:'pg', q:'Tumbuhan yang berkembang biak dengan spora adalah...',
+    opts:['Pakis','Mangga','Jagung','Cabai'], ans:0 },
+  { type:'bs', q:'Bunga sempurna memiliki alat kelamin jantan dan betina dalam satu bunga.',
+    opts:['Benar','Salah'], ans:0 },
+  { type:'pg', q:'Bagian bunga yang berfungsi sebagai alat kelamin betina adalah...',
+    opts:['Benang sari','Putik','Mahkota','Kelopak'], ans:1 },
+  { type:'pg', q:'Penyerbukan yang terjadi karena bantuan angin disebut...',
+    opts:['Anemogami','Entomogami','Hidrogami','Zoogami'], ans:0 },
+  { type:'bs', q:'Kentang berkembang biak dengan umbi batang.',
+    opts:['Benar','Salah'], ans:0 },
+  { type:'pg', q:'Perkembangbiakan dengan cara membengkokkan batang ke tanah hingga berakar disebut...',
+    opts:['Stek','Cangkok','Merunduk','Okulasi'], ans:2 },
+  { type:'bs', q:'Kaktus berkembang biak dengan tunas adventif pada daunnya.',
+    opts:['Benar','Salah'], ans:1 },
+  { type:'pg', q:'Contoh tumbuhan yang berkembang biak dengan geragih (stolon) adalah...',
+    opts:['Stroberi','Bawang','Pisang','Pakis'], ans:0 },
+  { type:'pg', q:'Tujuan utama mencangkok tanaman adalah...',
+    opts:['Mempercepat berbunga','Mendapatkan sifat sama dengan induk','Menambah jumlah akar','Membuat tanaman lebih tinggi'], ans:1 },
+  { type:'bs', q:'Perkembangbiakan vegetatif menghasilkan sifat anak yang sama persis dengan induknya.',
+    opts:['Benar','Salah'], ans:0 }
+];
+
+/* ============================================================
+   GAME STATE
+   ============================================================ */
+const GAME = {
+  totalQ: 20,
+  timeLimit: 180,
+  lives: 3,
+  maxLives: 3,
+  currentQ: 0,
+  score: 0,
+  timeLeft: 180,
+  running: false,
+  boxPositions: [],
+  marioWorldX: 60,      // posisi Mario di dunia
+  cameraX: 0,           // offset kamera (dunia - layar)
+  speed: 2.8,           // px per frame berjalan
+  questionActive: false,
+  jumping: false,
+  timerId: null,
+  animId: null,
+  answeredFlags: new Array(20).fill(false),
+  correctFlags: new Array(20).fill(false)
+};
+
+/* Posisi Mario di layar (sticky) */
+const MARIO_SCREEN_X = 60;
+const MARIO_WIDTH = 56;
+const BOX_SIZE = 48;
+/* Hitung jarak antar kotak = kelipatan 3 * 130 = 390px di dunia */
+const BOX_SPACING = 130 * 3;
+
+/* ============================================================
+   ELEMENTS
+   ============================================================ */
+const $ = id => document.getElementById(id);
+const wrap = $('game-wrap');
+const camera = $('camera');
+const boxesLayer = $('boxes-layer');
+const marioEl = $('mario');
+const heartsEl = $('hearts');
+const timerBox = $('timer-box');
+const scoreBox = $('score-box');
+const qmodal = $('qmodal');
+const qnum = $('qnum');
+const qtext = $('qtext');
+const answersEl = $('answers');
+const feedbackEl = $('feedback');
+const startScreen = $('start-screen');
+const endScreen = $('end-screen');
+const toastEl = $('toast');
+const flashEl = $('flash');
+
+/* ============================================================
+   AUDIO
+   ============================================================ */
+let audioCtx = null;
+let musicNodes = [];
+let musicPlaying = false;
+
+function initAudio(){
+  if(!audioCtx){
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    catch(e){ audioCtx = null; }
+  }
+  if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function playTone(freq, dur, type='square', vol=0.15, delay=0){
+  if(!audioCtx) return;
+  const t0 = audioCtx.currentTime + delay;
+  const osc = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t0);
+  g.gain.setValueAtTime(vol, t0);
+  g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+  osc.connect(g); g.connect(audioCtx.destination);
+  osc.start(t0); osc.stop(t0 + dur + 0.02);
+}
+
+function sfxJump(){
+  // suara khas Mario melompat (naik)
+  playTone(392, .06, 'square', .13, 0);
+  playTone(523, .08, 'square', .13, .05);
+  playTone(784, .12, 'square', .12, .11);
+}
+function sfxStomp(){
+  // suara menginjak (turun)
+  playTone(220, .05, 'square', .18, 0);
+  playTone(165, .1, 'square', .15, .05);
+  playTone(110, .14, 'triangle', .15, .1);
+}
+function sfxCorrect(){
+  [523,659,784,1047].forEach((f,i)=>playTone(f,.12,'square',.14,i*.08));
+}
+function sfxWrong(){
+  [300,220,150].forEach((f,i)=>playTone(f,.18,'sawtooth',.16,i*.1));
+}
+function sfxBox(){
+  playTone(880,.06,'square',.1,0);
+  playTone(1320,.08,'square',.08,.05);
+}
+function sfxGameOver(){
+  [400,350,300,200,150].forEach((f,i)=>playTone(f,.3,'triangle',.18,i*.2));
+}
+function sfxWin(){
+  const mel=[523,659,784,1047,784,1047,1319];
+  mel.forEach((f,i)=>playTone(f,.18,'square',.15,i*.14));
+}
+function sfxHeart(){
+  [200,150,100].forEach((f,i)=>playTone(f,.2,'sawtooth',.2,i*.08));
+}
+
+function startMusic(){
+  if(!audioCtx || musicPlaying) return;
+  musicPlaying = true;
+  const bass = [131,131,196,196,220,220,196,0, 165,165,196,196,220,220,262,0];
+  const lead = [523,0,659,0,784,0,659,0, 587,0,523,0,440,0,392,0];
+  const step = 0.22;
+  let loop = () => {
+    if(!musicPlaying) return;
+    const now = audioCtx.currentTime;
+    bass.forEach((f,i)=>{
+      if(f>0) scheduleNote(f, now + i*step, step*0.9, 'triangle', 0.10);
+    });
+    lead.forEach((f,i)=>{
+      if(f>0) scheduleNote(f, now + i*step, step*0.7, 'square', 0.045);
+    });
+    const total = bass.length * step;
+    const tid = setTimeout(loop, total*1000);
+    musicNodes.push(tid);
+  };
+  loop();
+}
+function scheduleNote(freq, t, dur, type, vol){
+  if(!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t);
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  osc.connect(g); g.connect(audioCtx.destination);
+  osc.start(t); osc.stop(t + dur + 0.02);
+}
+function stopMusic(){
+  musicPlaying = false;
+  musicNodes.forEach(id=>clearTimeout(id));
+  musicNodes = [];
+}
+
+/* ============================================================
+   LIVES
+   ============================================================ */
+function renderHearts(){
+  heartsEl.innerHTML = '';
+  for(let i=0;i<GAME.maxLives;i++){
+    const d = document.createElement('div');
+    d.className = 'heart' + (i >= GAME.lives ? ' broken' : '');
+    d.innerHTML = `<svg viewBox="0 0 24 24">
+      <path d="M12 21s-8-5.2-8-11a5 5 0 0 1 9-3 5 5 0 0 1 9 3c0 5.8-8 11-8 11z"
+        fill="${i<GAME.lives?'#ff3b3b':'#6b6b6b'}"
+        stroke="${i<GAME.lives?'#a80000':'#333'}" stroke-width="1.5"/>
+    </svg>`;
+    heartsEl.appendChild(d);
+  }
+}
+function breakHeart(){
+  const hearts = heartsEl.querySelectorAll('.heart');
+  const idx = GAME.maxLives - GAME.lives;
+  if(hearts[idx]) hearts[idx].classList.add('broken');
+}
+
+/* ============================================================
+   BUILD BOXES — jarak kelipatan 3 di dunia
+   ============================================================ */
+function buildBoxes(){
+  boxesLayer.innerHTML = '';
+  GAME.boxPositions = [];
+  for(let i=0;i<GAME.totalQ;i++){
+    const x = 400 + i * BOX_SPACING; // dunia
+    GAME.boxPositions.push(x);
+    const b = document.createElement('div');
+    b.className = 'qbox';
+    b.id = 'box-'+i;
+    b.textContent = '?';
+    b.style.left = x + 'px';
+    boxesLayer.appendChild(b);
+  }
+}
+
+/* ============================================================
+   CAMERA
+   ============================================================ */
+function updateCamera(){
+  // Kamera mengikuti Mario; Mario selalu di MARIO_SCREEN_X
+  GAME.cameraX = GAME.marioWorldX - MARIO_SCREEN_X;
+  camera.style.transform = `translateX(${-GAME.cameraX}px)`;
+}
+
+/* ============================================================
+   PARTIKEL saat menginjak kotak
+   ============================================================ */
+function spawnPopParticles(worldX){
+  const symbols = ['✨','⭐','💫'];
+  for(let i=0;i<6;i++){
+    const p = document.createElement('div');
+    p.className = 'pop-particle';
+    p.textContent = symbols[Math.floor(Math.random()*symbols.length)];
+    p.style.left = (worldX + 12) + 'px';
+    p.style.bottom = '120px';
+    const dx = (Math.random()-0.5) * 80;
+    const dy = -(40 + Math.random()*60);
+    p.style.setProperty('--dx', dx+'px');
+    p.style.setProperty('--dy', dy+'px');
+    boxesLayer.appendChild(p);
+    setTimeout(()=>p.remove(), 650);
+  }
+}
+
+/* ============================================================
+   GAME LOOP
+   ============================================================ */
+let lastTs = 0;
+
+function loop(ts){
+  if(!GAME.running) return;
+  const dt = Math.min(50, ts - lastTs) / 16.67;
+  lastTs = ts;
+
+  if(!GAME.questionActive && !GAME.jumping){
+    // Mario berjalan maju
+    GAME.marioWorldX += GAME.speed * dt;
+    updateCamera();
+
+    // Cek apakah sudah mencapai kotak berikutnya
+    const idx = GAME.currentQ;
+    if(idx < GAME.totalQ){
+      const boxWorldX = GAME.boxPositions[idx];
+      // Titik tengah Mario di dunia
+      const marioCenter = GAME.marioWorldX + MARIO_WIDTH/2;
+      const boxCenter = boxWorldX + BOX_SIZE/2;
+      // Jika Mario sudah dekat kotak -> lompat & injak
+      if(!GAME.jumping && marioCenter >= boxCenter - 90){
+        startJumpAndStomp(idx);
+      }
+    }
+  }
+
+  GAME.animId = requestAnimationFrame(loop);
+}
+
+/* ============================================================
+   JUMP + STOMP sequence
+   ============================================================ */
+function startJumpAndStomp(idx){
+  GAME.jumping = true;
+  GAME.questionActive = true; // lock sementara
+  marioEl.classList.remove('walking');
+  marioEl.classList.add('jumping');
+  sfxJump();
+
+  // Perkirakan durasi lompatan
+  const jumpDuration = 750;
+  const boxWorldX = GAME.boxPositions[idx];
+
+  // Selama lompatan, geser sedikit ke depan agar mendarat tepat di kotak
+  const startX = GAME.marioWorldX;
+  const targetX = boxWorldX - MARIO_WIDTH/2 + 4; // Mario mendarat tepat di atas kotak
+  const jumpStartTime = performance.now();
+
+  function animateJump(now){
+    if(!GAME.running) return;
+    const t = Math.min(1, (now - jumpStartTime) / jumpDuration);
+    // interpolasi linear
+    GAME.marioWorldX = startX + (targetX - startX) * t;
+    updateCamera();
+    if(t < 1){
+      requestAnimationFrame(animateJump);
+    }
+  }
+  requestAnimationFrame(animateJump);
+
+  // Setelah mendarat -> stomp
+  setTimeout(()=>{
+    if(!GAME.running) return;
+    marioEl.classList.remove('jumping');
+    marioEl.classList.add('stomp');
+    sfxStomp();
+
+    // Efek kotak terinjak
+    const box = document.getElementById('box-'+idx);
+    if(box) box.classList.add('stomped');
+    spawnPopParticles(boxWorldX);
+
+    // Kamera sedikit bergetar
+    camera.style.transition = 'transform .08s';
+    camera.style.transform = `translateX(${-GAME.cameraX}px) translateY(4px)`;
+    setTimeout(()=>{
+      camera.style.transition = '';
+      camera.style.transform = `translateX(${-GAME.cameraX}px)`;
+    }, 90);
+
+    setTimeout(()=>{
+      marioEl.classList.remove('stomp');
+      GAME.jumping = false;
+      // Tampilkan soal
+      openQuestion(idx);
+    }, 220);
+  }, jumpDuration);
+}
+
+/* ============================================================
+   TIMER
+   ============================================================ */
+function startTimer(){
+  GAME.timeLeft = GAME.timeLimit;
+  updateTimerUI();
+  GAME.timerId = setInterval(()=>{
+    if(!GAME.running) return;
+    GAME.timeLeft--;
+    updateTimerUI();
+    if(GAME.timeLeft <= 20) timerBox.classList.add('warn');
+    if(GAME.timeLeft <= 0){
+      endGame(false);
+    }
+  }, 1000);
+}
+function updateTimerUI(){
+  timerBox.textContent = '⏱ ' + GAME.timeLeft;
+}
+function stopTimer(){
+  clearInterval(GAME.timerId);
+  GAME.timerId = null;
+}
+
+/* ============================================================
+   QUESTION
+   ============================================================ */
+function openQuestion(idx){
+  sfxBox();
+  const data = QUESTIONS[idx];
+  qnum.textContent = `SOAL ${idx+1}/${GAME.totalQ} • ${data.type === 'pg' ? 'PILIHAN GANDA' : 'BENAR/SALAH'}`;
+  qtext.textContent = data.q;
+  feedbackEl.textContent = '';
+  feedbackEl.className = 'feedback';
+  answersEl.innerHTML = '';
+
+  const labels = ['A','B','C','D'];
+  data.opts.forEach((opt, i)=>{
+    const btn = document.createElement('button');
+    btn.className = 'ans-btn';
+    btn.innerHTML = `<span class="lbl">${data.type==='bs'?(i===0?'B':'S'):labels[i]}</span><span>${opt}</span>`;
+    btn.onclick = ()=> answerQuestion(idx, i, btn);
+    answersEl.appendChild(btn);
+  });
+
+  qmodal.classList.add('show');
+}
+
+function answerQuestion(idx, chosen, btnEl){
+  const data = QUESTIONS[idx];
+  const correct = chosen === data.ans;
+  const allBtns = answersEl.querySelectorAll('.ans-btn');
+  allBtns.forEach(b=>b.disabled = true);
+
+  if(correct){
+    btnEl.classList.add('correct');
+    feedbackEl.textContent = '✔ BENAR! Hebat!';
+    feedbackEl.className = 'feedback ok';
+    sfxCorrect();
+    GAME.score++;
+    GAME.correctFlags[idx] = true;
+    scoreBox.textContent = `⭐ ${GAME.score}/${GAME.totalQ}`;
+    const box = document.getElementById('box-'+idx);
+    if(box){ box.classList.add('done'); box.textContent = ''; box.classList.remove('stomped'); }
+  } else {
+    btnEl.classList.add('wrong');
+    allBtns[data.ans].classList.add('correct');
+    feedbackEl.textContent = '✘ SALAH! Jawaban benar: ' + data.opts[data.ans];
+    feedbackEl.className = 'feedback no';
+    sfxWrong();
+    GAME.lives--;
+    renderHearts();
+    breakHeart();
+    sfxHeart();
+    flashEl.classList.add('flash');
+    setTimeout(()=>flashEl.classList.remove('flash'), 360);
+  }
+
+  GAME.answeredFlags[idx] = true;
+
+  setTimeout(()=>{
+    qmodal.classList.remove('show');
+    GAME.questionActive = false;
+    GAME.currentQ++;
+
+    if(GAME.lives <= 0){
+      endGame(false);
+      return;
+    }
+    if(GAME.currentQ >= GAME.totalQ){
+      endGame(true);
+      return;
+    }
+    // Lanjut berjalan: Mario sudah di atas kotak, jadi tinggal jalan ke kotak berikutnya
+    marioEl.classList.add('walking');
+  }, 1400);
+}
+
+/* ============================================================
+   TOAST
+   ============================================================ */
+function showToast(text, isBad){
+  toastEl.textContent = text;
+  toastEl.className = isBad ? 'no show' : 'show';
+  setTimeout(()=>{ toastEl.classList.remove('show'); }, 1400);
+}
+
+/* ============================================================
+   START / END / RESET
+   ============================================================ */
+function resetGame(){
+  GAME.lives = 3;
+  GAME.currentQ = 0;
+  GAME.score = 0;
+  GAME.timeLeft = GAME.timeLimit;
+  GAME.marioWorldX = 60;
+  GAME.cameraX = 0;
+  GAME.questionActive = false;
+  GAME.jumping = false;
+  GAME.running = false;
+  GAME.answeredFlags = new Array(20).fill(false);
+  GAME.correctFlags = new Array(20).fill(false);
+
+  marioEl.classList.remove('walking','jumping','stomp');
+  renderHearts();
+  scoreBox.textContent = `⭐ 0/${GAME.totalQ}`;
+  timerBox.textContent = '⏱ ' + GAME.timeLimit;
+  timerBox.classList.remove('warn');
+  buildBoxes();
+  updateCamera();
+  qmodal.classList.remove('show');
+  endScreen.classList.remove('show');
+  startScreen.classList.remove('hide');
+}
+
+function startGame(){
+  initAudio();
+  resetGame();
+  startScreen.classList.add('hide');
+  endScreen.classList.remove('show');
+  GAME.running = true;
+  marioEl.classList.add('walking');
+  updateCamera();
+  startTimer();
+  startMusic();
+  lastTs = performance.now();
+  GAME.animId = requestAnimationFrame(loop);
+}
+
+function endGame(finishedAll){
+  if(!GAME.running) return;
+  GAME.running = false;
+  stopTimer();
+  stopMusic();
+  marioEl.classList.remove('walking','jumping','stomp');
+  cancelAnimationFrame(GAME.animId);
+
+  const totalCorrect = GAME.score;
+  let stars = 1;
+  if(totalCorrect >= 18) stars = 3;
+  else if(totalCorrect >= 12) stars = 2;
+
+  let title, msg;
+  if(GAME.lives <= 0){
+    title = 'GAME OVER';
+    msg = 'Nyawa habis! Coba lagi ya.';
+    sfxGameOver();
+  } else if(finishedAll){
+    title = 'SELAMAT! 🎉';
+    msg = 'Kamu berhasil menamatkan petualangan!';
+    sfxWin();
+    launchConfetti();
+  } else {
+    title = 'WAKTU HABIS!';
+    msg = 'Waktu 180 detik telah berakhir.';
+    sfxGameOver();
+  }
+
+  $('endTitle').textContent = title;
+  const starStr = '⭐'.repeat(stars) + '☆'.repeat(3-stars);
+  $('endStars').textContent = starStr;
+  $('endStats').innerHTML =
+    `Skor: <b>${GAME.score} / ${GAME.totalQ}</b><br>` +
+    `Nyawa tersisa: <b>${Math.max(0,GAME.lives)} ❤️</b><br>` +
+    `Waktu tersisa: <b>${GAME.timeLeft} detik</b><br>` +
+    `<span style="font-size:12px;color:#9fb4e0">${msg}</span>`;
+
+  endScreen.classList.add('show');
+
+  // Simpan JSON
+  const prev = loadProgress() || { bestScore: 0, bestTime: 0, plays: 0 };
+  const rec = {
+    bestScore: Math.max(prev.bestScore, GAME.score),
+    bestTime: Math.max(prev.bestTime, GAME.timeLimit - GAME.timeLeft),
+    plays: prev.plays + 1,
+    lastPlayed: new Date().toISOString(),
+    lastScore: GAME.score,
+    lastLives: GAME.lives,
+    lastTimeLeft: GAME.timeLeft
+  };
+  saveProgress(rec);
+}
+
+/* ============================================================
+   CONFETTI
+   ============================================================ */
+function launchConfetti(){
+  const colors = ['#ff5a4d','#ffe066','#4a7dff','#3fa33f','#ff8c00','#ffffff'];
+  for(let i=0;i<70;i++){
+    const c = document.createElement('div');
+    c.className = 'confetti';
+    c.style.left = Math.random()*100 + '%';
+    c.style.background = colors[Math.floor(Math.random()*colors.length)];
+    c.style.animationDuration = (1.5 + Math.random()*1.8) + 's';
+    c.style.animationDelay = (Math.random()*0.8) + 's';
+    c.style.width = (6 + Math.random()*8) + 'px';
+    c.style.height = (10 + Math.random()*10) + 'px';
+    wrap.appendChild(c);
+    setTimeout(()=>c.remove(), 4200);
+  }
+}
+
+/* ============================================================
+   JSON STORAGE
+   ============================================================ */
+function saveProgress(data){
+  try { localStorage.setItem('mario_plant_science', JSON.stringify(data)); } catch(e){}
+}
+function loadProgress(){
+  try {
+    const raw = localStorage.getItem('mario_plant_science');
+    return raw ? JSON.parse(raw) : null;
+  } catch(e){ return null; }
+}
+
+/* ============================================================
+   EVENT LISTENERS
+   ============================================================ */
+$('btn-start').addEventListener('click', startGame);
+$('btn-restart').addEventListener('click', ()=>{
+  endScreen.classList.remove('show');
+  startScreen.classList.remove('hide');
+  GAME.running = false;
+  stopTimer();
+  stopMusic();
+});
+
+resetGame();
+
+['touchstart','click','keydown'].forEach(ev=>{
+  document.addEventListener(ev, function once(){
+    initAudio();
+    document.removeEventListener(ev, once);
+  }, {once:true});
+});
+
+document.addEventListener('touchmove', e=>e.preventDefault(), {passive:false});
+</script>
+</body>
+</html>
