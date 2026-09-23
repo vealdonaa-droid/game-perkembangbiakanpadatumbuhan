@@ -48,7 +48,7 @@
   .h6 { width:170px; height:100px; left:5000px; background:#3aa03a; }
   .h7 { width:240px; height:130px; left:6200px; background:#2a7d2a; }
 
-  /* MARIO — wrapper untuk y-offset lompatan */
+  /* MARIO — selalu di posisi layar tetap (sticky kiri) */
   #mario-wrap {
     position:absolute; left:60px; bottom:80px; width:56px; height:80px;
     z-index: 20; pointer-events: none;
@@ -109,6 +109,16 @@
 
   #mario.walking { animation: marioWalk .3s ease-in-out infinite; }
   @keyframes marioWalk { 0%,100% { transform: translateY(0) rotate(-2deg);} 50% { transform: translateY(-5px) rotate(2deg);} }
+
+  /* Lompat di tempat: badan naik-turun, tapi posisi X TIDAK berubah */
+  #mario.jumping { animation: marioJumpInPlace .75s cubic-bezier(.35,.05,.35,1) forwards; }
+  @keyframes marioJumpInPlace {
+    0%   { transform: translateY(0) scale(1) rotate(0deg); }
+    25%  { transform: translateY(-70px) scale(1.08) rotate(-6deg); }
+    50%  { transform: translateY(-110px) scale(1.12) rotate(0deg); }
+    75%  { transform: translateY(-60px) scale(1.05) rotate(6deg); }
+    100% { transform: translateY(0) scale(.92) rotate(0deg); }
+  }
 
   #mario.airborne { animation: marioAir .7s ease-in-out infinite; }
   @keyframes marioAir {
@@ -225,9 +235,6 @@
     border: 2px solid rgba(255,255,255,.4);
   }
 
-  /* ============================================================
-     PETUNJUK TAP — HANYA muncul di awal game
-     ============================================================ */
   #tap-hint {
     position:absolute; bottom:14px; left:50%; transform:translateX(-50%);
     background: rgba(0,0,0,.65); color:#fff;
@@ -235,25 +242,20 @@
     font-size: 13px; font-weight:700; z-index: 60;
     border: 2px solid rgba(255,255,255,.45);
     text-align: center;
-    /* default: tidak terlihat */
-    opacity: 0;
-    visibility: hidden;
+    opacity: 0; visibility: hidden;
     transition: opacity .4s, visibility .4s;
     pointer-events:none;
     box-shadow: 0 4px 14px rgba(0,0,0,.5);
     white-space: nowrap;
   }
-  /* hanya saat class .show aktif */
   #tap-hint.show {
-    opacity: 1;
-    visibility: visible;
+    opacity: 1; visibility: visible;
     animation: hintBounce 1.2s ease-in-out infinite;
   }
   @keyframes hintBounce {
     0%,100% { transform: translateX(-50%) translateY(0); }
     50%     { transform: translateX(-50%) translateY(-6px); }
   }
-  /* menghilang perlahan */
   #tap-hint.hide { opacity:0; visibility:hidden; }
 
   #start-screen {
@@ -447,7 +449,6 @@
     </div>
   </div>
 
-  <!-- Petunjuk tap — HANYA muncul di awal game -->
   <div id="tap-hint">👆 Tap / klik layar untuk melompat ambil ❤️</div>
 
   <div id="start-screen">
@@ -852,9 +853,11 @@ function loop(ts){
   lastTs = ts;
 
   if(!GAME.questionActive && !GAME.jumping){
+    // Mario maju di dunia → kamera bergerak
     GAME.marioWorldX += GAME.speed * dt;
     updateCamera();
 
+    // Fisika lompatan manual
     if(!GAME.onGround || GAME.marioVY !== 0){
       GAME.marioY += GAME.marioVY * dt;
       GAME.marioVY -= GRAVITY * dt;
@@ -871,6 +874,7 @@ function loop(ts){
     maybeAutoJumpForHeart();
     checkHeartCollision();
 
+    // Cek kotak soal berikutnya
     const idx = GAME.currentQ;
     if(idx < GAME.totalQ){
       const boxWorldX = GAME.boxPositions[idx];
@@ -885,7 +889,7 @@ function loop(ts){
 }
 
 /* ============================================================
-   LOMPAT
+   LOMPAT MANUAL
    ============================================================ */
 function tryJump(){
   if(!GAME.running) return;
@@ -898,7 +902,6 @@ function tryJump(){
   marioEl.classList.add('airborne');
   sfxJump();
 }
-
 function maybeAutoJumpForHeart(){
   if(!GAME.onGround) return;
   if(GAME.jumping) return;
@@ -955,7 +958,11 @@ function collectHeart(h){
 }
 
 /* ============================================================
-   LOMPAT KE KOTAK SOAL
+   LOMPAT & INJAK KOTAK SOAL
+   ------------------------------------------------------------
+   Mario TETAP di posisi layar (tidak bergeser).
+   Kamera sedikit maju agar kotak masuk tepat di bawah Mario,
+   lalu Mario melakukan lompatan di tempat + stomp.
    ============================================================ */
 function startJumpAndStomp(idx){
   GAME.jumping = true;
@@ -964,31 +971,50 @@ function startJumpAndStomp(idx){
   marioEl.classList.add('jumping');
   sfxJump();
 
-  const jumpDuration = 750;
-  const boxWorldX = GAME.boxPositions[idx];
-  const startX = GAME.marioWorldX;
-  const targetX = boxWorldX - MARIO_WIDTH/2 + 4;
-  const jumpStartTime = performance.now();
+  // --- Fase 1: geser kamera supaya kotak soal tepat di bawah Mario ---
+  // Mario di layar tetap di MARIO_SCREEN_X. Kotak harus berada
+  // di dunia pada posisi: marioWorldX + (BOX_SIZE/2 - MARIO_WIDTH/2)
+  const targetMarioWorldX = GAME.boxPositions[idx] + BOX_SIZE/2 - MARIO_WIDTH/2;
 
-  function animateJump(now){
+  // Selama ~350ms pertama, majukan marioWorldX (dan kamera) hingga pas,
+  // sambil Mario sudah mulai melompat (animasi CSS jumping).
+  const preJumpDuration = 350;
+  const preJumpStart = performance.now();
+  const startWorldX = GAME.marioWorldX;
+
+  function slideCamera(now){
     if(!GAME.running) return;
-    const t = Math.min(1, (now - jumpStartTime) / jumpDuration);
-    GAME.marioWorldX = startX + (targetX - startX) * t;
+    const t = Math.min(1, (now - preJumpStart) / preJumpDuration);
+    // ease-out untuk pergerakan yang halus
+    const e = 1 - Math.pow(1 - t, 2);
+    GAME.marioWorldX = startWorldX + (targetMarioWorldX - startWorldX) * e;
     updateCamera();
-    if(t < 1) requestAnimationFrame(animateJump);
+    // selama fase geser, cek collision juga (kalau ada hati di jalur)
+    checkHeartCollision();
+    if(t < 1){
+      requestAnimationFrame(slideCamera);
+    }
   }
-  requestAnimationFrame(animateJump);
+  requestAnimationFrame(slideCamera);
+
+  // --- Fase 2: setelah animasi lompatan selesai, stomp ---
+  const totalJumpDuration = 750;
 
   setTimeout(()=>{
     if(!GAME.running) return;
+    // Pastikan posisi Mario sudah tepat di atas kotak
+    GAME.marioWorldX = targetMarioWorldX;
+    updateCamera();
+
     marioEl.classList.remove('jumping');
     marioEl.classList.add('stomp');
     sfxStomp();
 
     const box = document.getElementById('box-'+idx);
     if(box) box.classList.add('stomped');
-    spawnPopParticles(boxWorldX, 20);
+    spawnPopParticles(GAME.boxPositions[idx], 20);
 
+    // Guncangan kamera kecil
     camera.style.transition = 'transform .08s';
     camera.style.transform = `translateX(${-GAME.cameraX}px) translateY(4px)`;
     setTimeout(()=>{
@@ -1001,7 +1027,7 @@ function startJumpAndStomp(idx){
       GAME.jumping = false;
       openQuestion(idx);
     }, 220);
-  }, jumpDuration);
+  }, totalJumpDuration);
 }
 
 /* ============================================================
@@ -1109,17 +1135,12 @@ function showToast(text, isBad, variant){
    PETUNJUK TAP — hanya muncul di awal
    ============================================================ */
 function showTapHintOnce(){
-  // Bersihkan dulu jika ada timeout yang belum jalan
   if(GAME.hintTimeout1) clearTimeout(GAME.hintTimeout1);
   if(GAME.hintTimeout2) clearTimeout(GAME.hintTimeout2);
-
   tapHint.classList.remove('hide');
   tapHint.classList.add('show');
-
-  // Hilang otomatis setelah 4 detik
   GAME.hintTimeout1 = setTimeout(()=>{
     tapHint.classList.add('hide');
-    // setelah transisi selesai, hapus class show agar tidak ikut animasi bounce
     GAME.hintTimeout2 = setTimeout(()=>{
       tapHint.classList.remove('show','hide');
     }, 500);
@@ -1163,8 +1184,6 @@ function resetGame(){
   qmodal.classList.remove('show');
   endScreen.classList.remove('show');
   startScreen.classList.remove('hide');
-
-  // Pastikan hint benar-benar tersembunyi saat di menu awal
   hideTapHint();
 }
 
@@ -1180,8 +1199,6 @@ function startGame(){
   startMusic();
   lastTs = performance.now();
   GAME.animId = requestAnimationFrame(loop);
-
-  // ===== TAMPILKAN PETUNJUK TAP HANYA DI AWAL GAME =====
   showTapHintOnce();
 }
 
@@ -1192,8 +1209,6 @@ function endGame(finishedAll){
   stopMusic();
   marioEl.classList.remove('walking','jumping','stomp','hurt','airborne');
   cancelAnimationFrame(GAME.animId);
-
-  // Sembunyikan hint saat game selesai (biar tidak nyangkut)
   hideTapHint();
 
   const totalCorrect = GAME.score;
