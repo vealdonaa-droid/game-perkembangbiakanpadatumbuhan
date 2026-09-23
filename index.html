@@ -48,7 +48,7 @@
   .h6 { width:170px; height:100px; left:5000px; background:#3aa03a; }
   .h7 { width:240px; height:130px; left:6200px; background:#2a7d2a; }
 
-  /* MARIO — selalu di posisi layar tetap (sticky kiri) */
+  /* MARIO */
   #mario-wrap {
     position:absolute; left:60px; bottom:80px; width:56px; height:80px;
     z-index: 20; pointer-events: none;
@@ -110,7 +110,6 @@
   #mario.walking { animation: marioWalk .3s ease-in-out infinite; }
   @keyframes marioWalk { 0%,100% { transform: translateY(0) rotate(-2deg);} 50% { transform: translateY(-5px) rotate(2deg);} }
 
-  /* Lompat di tempat: badan naik-turun, tapi posisi X TIDAK berubah */
   #mario.jumping { animation: marioJumpInPlace .75s cubic-bezier(.35,.05,.35,1) forwards; }
   @keyframes marioJumpInPlace {
     0%   { transform: translateY(0) scale(1) rotate(0deg); }
@@ -199,6 +198,9 @@
     100% { transform: translateY(-70px) scale(1); opacity:0; }
   }
 
+  /* ============================================================
+     HUD
+     ============================================================ */
   #hud {
     position:absolute; top:0; left:0; width:100%; padding:10px 12px;
     display:flex; justify-content:space-between; align-items:center;
@@ -220,6 +222,12 @@
     70%  { transform: scale(1.3) rotate(10deg); opacity:1; filter: grayscale(0); }
     100% { transform: scale(1) rotate(0); opacity:1; }
   }
+
+  /* Grup kanan HUD: skor + timer + tombol audio */
+  .hud-right {
+    display:flex; gap:6px; align-items:center;
+    pointer-events: auto;
+  }
   #timer-box {
     background: rgba(0,0,0,.45); color:#fff; padding:6px 14px;
     border-radius: 20px; font-weight:bold; font-size:16px;
@@ -233,6 +241,36 @@
     background: rgba(0,0,0,.45); color:#ffe066; padding:6px 12px;
     border-radius: 20px; font-weight:bold; font-size:14px;
     border: 2px solid rgba(255,255,255,.4);
+  }
+
+  /* ============================================================
+     TOMBOL AUDIO (mute/unmute backsound)
+     ============================================================ */
+  #btn-audio {
+    width: 40px; height: 40px;
+    background: rgba(0,0,0,.55);
+    color:#fff;
+    border: 2px solid rgba(255,255,255,.5);
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex; align-items:center; justify-content:center;
+    font-size: 18px;
+    padding: 0;
+    transition: transform .1s, background .2s;
+    box-shadow: 0 3px 0 rgba(0,0,0,.4);
+    pointer-events: auto;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #btn-audio:active { transform: translateY(3px); box-shadow: 0 0 0 rgba(0,0,0,.4); }
+  #btn-audio.muted {
+    background: rgba(120,20,20,.75);
+    border-color: #ff8080;
+  }
+  #btn-audio.muted::after {
+    content:''; position:absolute; width: 34px; height: 3px;
+    background:#ff8080; transform: rotate(-45deg);
+    border-radius: 2px;
+    box-shadow: 0 0 4px rgba(0,0,0,.6);
   }
 
   #tap-hint {
@@ -443,13 +481,14 @@
 
   <div id="hud">
     <div class="hearts" id="hearts"></div>
-    <div style="display:flex; gap:8px; align-items:center;">
+    <div class="hud-right">
       <div id="score-box">⭐ 0/20</div>
       <div id="timer-box">⏱ 180</div>
+      <button id="btn-audio" title="Mute/Unmute backsound" aria-label="Mute/Unmute backsound">🔊</button>
     </div>
   </div>
 
-  <div id="tap-hint">👆 Tap / klik layar untuk melompat ambil ❤️</div>
+  <div id="tap-hint">👆 Tap / klik layar untuk melompat (bisa berkali-kali!)</div>
 
   <div id="start-screen">
     <div class="mario-preview" id="previewMario">
@@ -472,8 +511,8 @@
     <button id="btn-start">▶ MULAI</button>
     <div class="hint">
       ❤️ 3 Nyawa &nbsp;|&nbsp; ⏱ 180 Detik &nbsp;|&nbsp; 📦 20 Kotak Soal<br>
-      💖 <b>Tap layar</b> untuk melompat ambil nyawa melayang!<br>
-      Mario berlari, melompat, dan MENGINJAK kotak pertanyaan!
+      💖 <b>Tap layar berkali-kali</b> untuk melompat setinggi-tingginya!<br>
+      🔊 Tombol mute tersedia di kanan atas saat bermain.
     </div>
   </div>
 
@@ -582,9 +621,14 @@ const GAME = {
   boxPositions: [],
   marioWorldX: 60,
   cameraX: 0,
+  // Fisika
   marioY: 0,
   marioVY: 0,
   onGround: true,
+  // Multi-jump
+  airJumpsUsed: 0,       // berapa kali lompat tambahan di udara
+  MAX_AIR_JUMPS: 99,     // boleh lompat sebanyak yang diinginkan (praktis tak terbatas)
+  jumpHoldBoost: 0,      // boost saat menahan tap
   speed: 2.8,
   questionActive: false,
   jumping: false,
@@ -607,6 +651,8 @@ const BOX_SPACING = 130 * 3;
 const HEART_SIZE = 40;
 const GRAVITY = 0.9;
 const JUMP_VELOCITY = 14;
+/* Batas tinggi maksimum agar Mario tidak terbang ke luar layar */
+const MAX_MARIO_Y = 620;
 
 /* ============================================================
    ELEMENTS
@@ -631,13 +677,17 @@ const endScreen = $('end-screen');
 const toastEl = $('toast');
 const flashEl = $('flash');
 const tapHint = $('tap-hint');
+const btnAudio = $('btn-audio');
 
 /* ============================================================
-   AUDIO
+   AUDIO — dengan kontrol mute global
    ============================================================ */
 let audioCtx = null;
 let musicNodes = [];
 let musicPlaying = false;
+let sfxMuted = false;     // mute efek suara juga
+let musicMuted = false;   // mute backsound saja
+let masterMuted = false;  // mute total (backsound + sfx)
 
 function initAudio(){
   if(!audioCtx){
@@ -647,6 +697,7 @@ function initAudio(){
 }
 function playTone(freq, dur, type='square', vol=0.15, delay=0){
   if(!audioCtx) return;
+  if(masterMuted) return;   // kalau mute total, jangan bunyi
   const t0 = audioCtx.currentTime + delay;
   const osc = audioCtx.createOscillator();
   const g = audioCtx.createGain();
@@ -669,12 +720,18 @@ function sfxLifeUp(){ [659, 880, 1175, 1568].forEach((f,i)=>playTone(f,.14,'squa
 
 function startMusic(){
   if(!audioCtx || musicPlaying) return;
+  if(masterMuted) return;
   musicPlaying = true;
   const bass = [131,131,196,196,220,220,196,0, 165,165,196,196,220,220,262,0];
   const lead = [523,0,659,0,784,0,659,0, 587,0,523,0,440,0,392,0];
   const step = 0.22;
   let loop = () => {
     if(!musicPlaying) return;
+    if(masterMuted) { // kalau di-mute, jangan jadwalkan note baru
+      const tid = setTimeout(loop, 220*16);
+      musicNodes.push(tid);
+      return;
+    }
     const now = audioCtx.currentTime;
     bass.forEach((f,i)=>{ if(f>0) scheduleNote(f, now + i*step, step*0.9, 'triangle', 0.10); });
     lead.forEach((f,i)=>{ if(f>0) scheduleNote(f, now + i*step, step*0.7, 'square', 0.045); });
@@ -686,6 +743,7 @@ function startMusic(){
 }
 function scheduleNote(freq, t, dur, type, vol){
   if(!audioCtx) return;
+  if(masterMuted) return;
   const osc = audioCtx.createOscillator();
   const g = audioCtx.createGain();
   osc.type = type;
@@ -699,6 +757,27 @@ function stopMusic(){
   musicPlaying = false;
   musicNodes.forEach(id=>clearTimeout(id));
   musicNodes = [];
+}
+
+/* ============================================================
+   MUTE / UNMUTE TOGGLE
+   ============================================================ */
+function toggleMute(){
+  masterMuted = !masterMuted;
+  if(masterMuted){
+    btnAudio.classList.add('muted');
+    btnAudio.textContent = '🔇';
+    // matikan backsound yang sedang berjalan
+    stopMusic();
+    // jeda semua node audio yang mungkin masih menyala? — stopMusic sudah cukup
+  } else {
+    btnAudio.classList.remove('muted');
+    btnAudio.textContent = '🔊';
+    // hidupkan lagi backsound kalau game sedang berjalan
+    if(GAME.running && audioCtx){
+      startMusic();
+    }
+  }
 }
 
 /* ============================================================
@@ -767,7 +846,7 @@ function buildFloatingHearts(){
   GAME.heartsSpawned = 0;
 
   const heartAfterBox = [2, 5, 8, 11, 14, 17];
-  const heights = [70, 180, 200, 85, 190, 175];
+  const heights = [70, 220, 320, 85, 260, 200];
 
   heartAfterBox.forEach((boxIdx, i) => {
     const boxX = GAME.boxPositions[boxIdx];
@@ -853,18 +932,24 @@ function loop(ts){
   lastTs = ts;
 
   if(!GAME.questionActive && !GAME.jumping){
-    // Mario maju di dunia → kamera bergerak
     GAME.marioWorldX += GAME.speed * dt;
     updateCamera();
 
-    // Fisika lompatan manual
     if(!GAME.onGround || GAME.marioVY !== 0){
       GAME.marioY += GAME.marioVY * dt;
       GAME.marioVY -= GRAVITY * dt;
+
+      // Batas atas: cegah Mario terbang keluar layar
+      if(GAME.marioY > MAX_MARIO_Y){
+        GAME.marioY = MAX_MARIO_Y;
+        if(GAME.marioVY > 0) GAME.marioVY = 0;   // berhenti naik kalau sudah di puncak
+      }
+
       if(GAME.marioY <= 0){
         GAME.marioY = 0;
         GAME.marioVY = 0;
         GAME.onGround = true;
+        GAME.airJumpsUsed = 0;         // reset saat mendarat
         marioEl.classList.remove('airborne');
         if(!GAME.jumping) marioEl.classList.add('walking');
       }
@@ -874,7 +959,6 @@ function loop(ts){
     maybeAutoJumpForHeart();
     checkHeartCollision();
 
-    // Cek kotak soal berikutnya
     const idx = GAME.currentQ;
     if(idx < GAME.totalQ){
       const boxWorldX = GAME.boxPositions[idx];
@@ -889,18 +973,44 @@ function loop(ts){
 }
 
 /* ============================================================
-   LOMPAT MANUAL
+   LOMPAT — bisa berkali-kali di udara (setinggi-tingginya)
+   ------------------------------------------------------------
+   - Tap pertama saat di tanah → lompatan dasar.
+   - Tap berikutnya saat di udara → tambah kecepatan naik
+     (air jump). Tetap ada gravitasi yang menarik turun,
+     jadi Mario bisa naik setinggi yang diinginkan dengan
+     tap berkali-kali cepat.
    ============================================================ */
 function tryJump(){
   if(!GAME.running) return;
   if(GAME.questionActive) return;
-  if(GAME.jumping) return;
-  if(!GAME.onGround) return;
-  GAME.onGround = false;
-  GAME.marioVY = JUMP_VELOCITY;
-  marioEl.classList.remove('walking');
-  marioEl.classList.add('airborne');
-  sfxJump();
+  if(GAME.jumping) return;         // lompatan ke kotak soal dikunci
+
+  if(GAME.onGround){
+    // Lompatan pertama dari tanah
+    GAME.onGround = false;
+    GAME.marioVY = JUMP_VELOCITY;
+    GAME.airJumpsUsed = 0;
+    marioEl.classList.remove('walking');
+    marioEl.classList.add('airborne');
+    sfxJump();
+  } else {
+    // Air jump — hanya kalau masih di bawah batas maksimum
+    if(GAME.airJumpsUsed < GAME.MAX_AIR_JUMPS && GAME.marioY < MAX_MARIO_Y - 10){
+      // Tambahkan kecepatan naik — semakin tinggi, dorongan sedikit berkurang
+      // supaya tidak meledak, tapi tetap bisa naik tinggi.
+      const boost = JUMP_VELOCITY * 0.85;
+      GAME.marioVY = Math.max(GAME.marioVY, 0) + boost;
+      GAME.airJumpsUsed++;
+      // Kalau belum ada class airborne, pasang
+      marioEl.classList.remove('walking');
+      marioEl.classList.add('airborne');
+      // SFX pitch naik sesuai jumlah lompatan (makin tinggi makin cempreng)
+      const pitch = 520 + GAME.airJumpsUsed * 40;
+      playTone(pitch, .06, 'square', .12, 0);
+      playTone(pitch * 1.5, .08, 'square', .10, .05);
+    }
+  }
 }
 function maybeAutoJumpForHeart(){
   if(!GAME.onGround) return;
@@ -959,10 +1069,6 @@ function collectHeart(h){
 
 /* ============================================================
    LOMPAT & INJAK KOTAK SOAL
-   ------------------------------------------------------------
-   Mario TETAP di posisi layar (tidak bergeser).
-   Kamera sedikit maju agar kotak masuk tepat di bawah Mario,
-   lalu Mario melakukan lompatan di tempat + stomp.
    ============================================================ */
 function startJumpAndStomp(idx){
   GAME.jumping = true;
@@ -971,13 +1077,8 @@ function startJumpAndStomp(idx){
   marioEl.classList.add('jumping');
   sfxJump();
 
-  // --- Fase 1: geser kamera supaya kotak soal tepat di bawah Mario ---
-  // Mario di layar tetap di MARIO_SCREEN_X. Kotak harus berada
-  // di dunia pada posisi: marioWorldX + (BOX_SIZE/2 - MARIO_WIDTH/2)
   const targetMarioWorldX = GAME.boxPositions[idx] + BOX_SIZE/2 - MARIO_WIDTH/2;
 
-  // Selama ~350ms pertama, majukan marioWorldX (dan kamera) hingga pas,
-  // sambil Mario sudah mulai melompat (animasi CSS jumping).
   const preJumpDuration = 350;
   const preJumpStart = performance.now();
   const startWorldX = GAME.marioWorldX;
@@ -985,24 +1086,18 @@ function startJumpAndStomp(idx){
   function slideCamera(now){
     if(!GAME.running) return;
     const t = Math.min(1, (now - preJumpStart) / preJumpDuration);
-    // ease-out untuk pergerakan yang halus
     const e = 1 - Math.pow(1 - t, 2);
     GAME.marioWorldX = startWorldX + (targetMarioWorldX - startWorldX) * e;
     updateCamera();
-    // selama fase geser, cek collision juga (kalau ada hati di jalur)
     checkHeartCollision();
-    if(t < 1){
-      requestAnimationFrame(slideCamera);
-    }
+    if(t < 1) requestAnimationFrame(slideCamera);
   }
   requestAnimationFrame(slideCamera);
 
-  // --- Fase 2: setelah animasi lompatan selesai, stomp ---
   const totalJumpDuration = 750;
 
   setTimeout(()=>{
     if(!GAME.running) return;
-    // Pastikan posisi Mario sudah tepat di atas kotak
     GAME.marioWorldX = targetMarioWorldX;
     updateCamera();
 
@@ -1014,7 +1109,6 @@ function startJumpAndStomp(idx){
     if(box) box.classList.add('stomped');
     spawnPopParticles(GAME.boxPositions[idx], 20);
 
-    // Guncangan kamera kecil
     camera.style.transition = 'transform .08s';
     camera.style.transform = `translateX(${-GAME.cameraX}px) translateY(4px)`;
     setTimeout(()=>{
@@ -1114,6 +1208,7 @@ function answerQuestion(idx, chosen, btnEl){
     if(GAME.currentQ >= GAME.totalQ){ endGame(true); return; }
 
     GAME.marioY = 0; GAME.marioVY = 0; GAME.onGround = true;
+    GAME.airJumpsUsed = 0;
     updateMarioY();
     marioEl.classList.remove('airborne');
     marioEl.classList.add('walking');
@@ -1166,6 +1261,7 @@ function resetGame(){
   GAME.marioY = 0;
   GAME.marioVY = 0;
   GAME.onGround = true;
+  GAME.airJumpsUsed = 0;
   GAME.questionActive = false;
   GAME.jumping = false;
   GAME.running = false;
@@ -1196,7 +1292,7 @@ function startGame(){
   marioEl.classList.add('walking');
   updateCamera();
   startTimer();
-  startMusic();
+  if(!masterMuted) startMusic();
   lastTs = performance.now();
   GAME.animId = requestAnimationFrame(loop);
   showTapHintOnce();
@@ -1293,17 +1389,33 @@ $('btn-restart').addEventListener('click', ()=>{
   hideTapHint();
 });
 
+/* Tombol mute — klik dan stopPropagation supaya tidak memicu lompat */
+btnAudio.addEventListener('click', (e)=>{
+  e.stopPropagation();
+  toggleMute();
+});
+btnAudio.addEventListener('pointerdown', (e)=>{
+  e.stopPropagation();
+});
+
+/* Tap area game → lompat (bisa berkali-kali) */
 wrap.addEventListener('pointerdown', (e)=>{
   if(qmodal.classList.contains('show')) return;
   if(!GAME.running) return;
   if(e.target.closest('#start-screen') || e.target.closest('#end-screen')) return;
+  if(e.target.closest('#btn-audio')) return;  // klik tombol audio jangan lompat
   tryJump();
 });
 
+/* Spasi / Arrow Up */
 document.addEventListener('keydown', (e)=>{
   if(e.code === 'Space' || e.code === 'ArrowUp'){
     e.preventDefault();
     tryJump();
+  }
+  // Tombol M untuk mute
+  if(e.code === 'KeyM'){
+    toggleMute();
   }
 });
 
