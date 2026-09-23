@@ -9,19 +9,15 @@
   html, body {
     width: 100%; height: 100%; overflow: hidden;
     font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
-    background: #000;
-    user-select: none;
+    background: #000; user-select: none;
   }
   #game-wrap {
-    position: relative;
-    width: 100vw; height: 100vh;
-    max-width: 480px;
+    position: relative; width: 100vw; height: 100vh; max-width: 480px;
     margin: 0 auto;
     background: linear-gradient(#5c94fc 0%, #8fc9ff 60%, #cfeaff 100%);
     overflow: hidden;
   }
 
-  /* SKY */
   .cloud { position: absolute; background: #fff; border-radius: 50%; opacity: .9; box-shadow: 0 6px 0 rgba(0,0,0,.06); }
   .cloud::before, .cloud::after { content:''; position:absolute; background:#fff; border-radius:50%; }
   .cloud::before { width:60%; height:120%; top:-40%; left:10%; }
@@ -31,7 +27,6 @@
   .c3 { width:90px; height:32px; top:4%; left:-100px; animation: drift 70s linear infinite 12s; }
   @keyframes drift { from{transform:translateX(0)} to{transform:translateX(600px)} }
 
-  /* WORLD */
   #world { position: absolute; left: 0; bottom: 0; width: 100%; height: 100%; }
   #camera { position:absolute; left:0; bottom:0; width:100%; height:100%; will-change: transform; }
   #ground {
@@ -53,12 +48,17 @@
   .h6 { width:170px; height:100px; left:5000px; background:#3aa03a; }
   .h7 { width:240px; height:130px; left:6200px; background:#2a7d2a; }
 
-  /* MARIO */
-  #mario {
+  /* MARIO — wrapper untuk y-offset lompatan */
+  #mario-wrap {
     position:absolute; left:60px; bottom:80px; width:56px; height:80px;
+    z-index: 20; pointer-events: none;
+    will-change: transform;
+  }
+  #mario {
+    position:absolute; left:0; top:0; width:56px; height:80px;
     transform-style: preserve-3d;
     filter: drop-shadow(0 8px 6px rgba(0,0,0,.35));
-    z-index: 20; transform-origin: center bottom;
+    transform-origin: center bottom;
   }
   .m-body {
     position:absolute; left:8px; bottom:0; width:40px; height:44px;
@@ -109,25 +109,22 @@
 
   #mario.walking { animation: marioWalk .3s ease-in-out infinite; }
   @keyframes marioWalk { 0%,100% { transform: translateY(0) rotate(-2deg);} 50% { transform: translateY(-5px) rotate(2deg);} }
-  #mario.jumping { animation: marioJump .75s cubic-bezier(.35,.05,.35,1) forwards; }
-  @keyframes marioJump {
-    0%   { transform: translateY(0) scale(1) rotate(0deg); }
-    20%  { transform: translateY(-30px) scale(1.05) rotate(-6deg); }
-    50%  { transform: translateY(-95px) scale(1.12) rotate(0deg); }
-    75%  { transform: translateY(-45px) scale(1.05) rotate(6deg); }
-    100% { transform: translateY(0) scale(.92) rotate(0deg); }
+
+  #mario.airborne { animation: marioAir .7s ease-in-out infinite; }
+  @keyframes marioAir {
+    0%,100% { transform: rotate(-6deg) scale(1.05,1.05); }
+    50%     { transform: rotate(6deg) scale(1.05,.95); }
   }
   #mario.stomp { animation: marioStomp .18s ease-out; }
-  @keyframes marioStomp { 0% { transform: translateY(0) scale(1.12,.85);} 60% { transform: translateY(0) scale(1.05,.95);} 100% { transform: translateY(0) scale(1,1);} }
+  @keyframes marioStomp { 0% { transform: scale(1.12,.85);} 60% { transform: scale(1.05,.95);} 100% { transform: scale(1,1);} }
   #mario.hurt { animation: marioHurt .45s ease-out; }
   @keyframes marioHurt {
-    0%{transform:translateY(0) rotate(0); filter:drop-shadow(0 8px 6px rgba(0,0,0,.35)) brightness(1);}
-    25%{transform:translateY(-10px) rotate(-8deg); filter:drop-shadow(0 8px 6px rgba(0,0,0,.35)) brightness(2) hue-rotate(-30deg);}
-    50%{transform:translateY(0) rotate(8deg); filter:drop-shadow(0 8px 6px rgba(0,0,0,.35)) brightness(.6);}
-    100%{transform:translateY(0) rotate(0); filter:drop-shadow(0 8px 6px rgba(0,0,0,.35)) brightness(1);}
+    0%{transform:translateY(0) rotate(0); filter:brightness(1);}
+    25%{transform:translateY(-10px) rotate(-8deg); filter:brightness(2) hue-rotate(-30deg);}
+    50%{transform:translateY(0) rotate(8deg); filter:brightness(.6);}
+    100%{transform:translateY(0) rotate(0); filter:brightness(1);}
   }
 
-  /* KOTAK */
   #boxes-layer { position:absolute; left:0; bottom:80px; width:100%; height:200px; }
   .qbox {
     position:absolute; bottom:0; width:48px; height:48px;
@@ -151,10 +148,9 @@
   .qbox.done::after { content:'✔'; font-size:22px; }
   @keyframes boxFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
 
-  /* NYAWA MELAYANG */
-  #hearts-layer { position:absolute; left:0; bottom:80px; width:100%; height:200px; }
+  #hearts-layer { position:absolute; left:0; bottom:80px; width:100%; height:100%; }
   .life-heart {
-    position:absolute; width:40px; height:40px; bottom: 70px; z-index: 6;
+    position:absolute; width:40px; height:40px; z-index: 6;
     filter: drop-shadow(0 0 10px rgba(255,60,60,.85)) drop-shadow(0 4px 3px rgba(0,0,0,.35));
     animation: heartFloat 1.6s ease-in-out infinite;
   }
@@ -172,6 +168,13 @@
     50%  { transform: translateY(-40px) scale(1.6); opacity:1; }
     100% { transform: translateY(-80px) scale(0); opacity:0; }
   }
+  .life-heart.high::after {
+    content:'↑'; position:absolute; bottom:-16px; left:50%; transform:translateX(-50%);
+    color:#fff; font-weight:900; font-size:14px;
+    text-shadow:0 0 6px #ff3b3b, 0 2px 0 #7a0f08;
+    animation: arrowUp .8s ease-in-out infinite;
+  }
+  @keyframes arrowUp { 0%,100%{transform:translate(-50%,0)} 50%{transform:translate(-50%,-4px)} }
 
   .pop-particle { position:absolute; font-size:16px; pointer-events:none; z-index:30; animation: popOut .6s ease-out forwards; }
   @keyframes popOut { 0% { transform: translate(0,0) scale(.5); opacity:1;} 100% { transform: translate(var(--dx), var(--dy)) scale(1.4); opacity:0;} }
@@ -186,7 +189,6 @@
     100% { transform: translateY(-70px) scale(1); opacity:0; }
   }
 
-  /* HUD */
   #hud {
     position:absolute; top:0; left:0; width:100%; padding:10px 12px;
     display:flex; justify-content:space-between; align-items:center;
@@ -195,10 +197,7 @@
   .hearts { display:flex; gap:6px; }
   .heart { width:26px; height:26px; position:relative; filter: drop-shadow(0 2px 0 rgba(0,0,0,.25)); transition: transform .15s; }
   .heart svg { width:100%; height:100%; }
-  /* Hati pecah — animasi dipicu SETELAH render, satu per satu */
-  .heart.broken .heart-path {
-    fill: #6b6b6b; stroke: #333;
-  }
+  .heart.broken .heart-path { fill: #6b6b6b; stroke: #333; }
   .heart.just-broken { animation: heartBreak .5s forwards; }
   @keyframes heartBreak {
     0%   { transform: scale(1) rotate(0); }
@@ -226,7 +225,37 @@
     border: 2px solid rgba(255,255,255,.4);
   }
 
-  /* START SCREEN */
+  /* ============================================================
+     PETUNJUK TAP — HANYA muncul di awal game
+     ============================================================ */
+  #tap-hint {
+    position:absolute; bottom:14px; left:50%; transform:translateX(-50%);
+    background: rgba(0,0,0,.65); color:#fff;
+    padding: 10px 18px; border-radius: 22px;
+    font-size: 13px; font-weight:700; z-index: 60;
+    border: 2px solid rgba(255,255,255,.45);
+    text-align: center;
+    /* default: tidak terlihat */
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity .4s, visibility .4s;
+    pointer-events:none;
+    box-shadow: 0 4px 14px rgba(0,0,0,.5);
+    white-space: nowrap;
+  }
+  /* hanya saat class .show aktif */
+  #tap-hint.show {
+    opacity: 1;
+    visibility: visible;
+    animation: hintBounce 1.2s ease-in-out infinite;
+  }
+  @keyframes hintBounce {
+    0%,100% { transform: translateX(-50%) translateY(0); }
+    50%     { transform: translateX(-50%) translateY(-6px); }
+  }
+  /* menghilang perlahan */
+  #tap-hint.hide { opacity:0; visibility:hidden; }
+
   #start-screen {
     position:absolute; inset:0; z-index:200;
     background: linear-gradient(160deg, #1b2a6b, #3d1e6d 60%, #6b1f4d);
@@ -273,7 +302,6 @@
   #btn-start:active { transform: translateY(6px); box-shadow: 0 2px 0 #7a0f08, 0 4px 10px rgba(0,0,0,.4); }
   .hint { font-size:11px; color:#9fb4e0; margin-top:16px; line-height:1.5; }
 
-  /* QUESTION MODAL */
   #qmodal {
     position:absolute; inset:0; z-index:300;
     background: rgba(10,15,40,.85);
@@ -321,7 +349,6 @@
   .feedback.ok { color:#1e6b1e; }
   .feedback.no { color:#cc1f14; }
 
-  /* END SCREEN */
   #end-screen {
     position:absolute; inset:0; z-index:400;
     background: radial-gradient(circle at 50% 30%, #2a1a5e, #0d0726);
@@ -394,20 +421,22 @@
     </div>
   </div>
 
-  <div id="mario">
-    <div class="m-hat"></div>
-    <div class="m-brim"></div>
-    <div class="m-head">
-      <div class="m-eye l"></div>
-      <div class="m-eye r"></div>
-      <div class="m-nose"></div>
-      <div class="m-must l"></div>
-      <div class="m-must r"></div>
+  <div id="mario-wrap">
+    <div id="mario">
+      <div class="m-hat"></div>
+      <div class="m-brim"></div>
+      <div class="m-head">
+        <div class="m-eye l"></div>
+        <div class="m-eye r"></div>
+        <div class="m-nose"></div>
+        <div class="m-must l"></div>
+        <div class="m-must r"></div>
+      </div>
+      <div class="m-body"></div>
+      <div class="m-overall"></div>
+      <div class="m-leg l"></div>
+      <div class="m-leg r"></div>
     </div>
-    <div class="m-body"></div>
-    <div class="m-overall"></div>
-    <div class="m-leg l"></div>
-    <div class="m-leg r"></div>
   </div>
 
   <div id="hud">
@@ -417,6 +446,9 @@
       <div id="timer-box">⏱ 180</div>
     </div>
   </div>
+
+  <!-- Petunjuk tap — HANYA muncul di awal game -->
+  <div id="tap-hint">👆 Tap / klik layar untuk melompat ambil ❤️</div>
 
   <div id="start-screen">
     <div class="mario-preview" id="previewMario">
@@ -439,7 +471,7 @@
     <button id="btn-start">▶ MULAI</button>
     <div class="hint">
       ❤️ 3 Nyawa &nbsp;|&nbsp; ⏱ 180 Detik &nbsp;|&nbsp; 📦 20 Kotak Soal<br>
-      💖 Kumpulkan <b>nyawa melayang</b> di sepanjang perjalanan!<br>
+      💖 <b>Tap layar</b> untuk melompat ambil nyawa melayang!<br>
       Mario berlari, melompat, dan MENGINJAK kotak pertanyaan!
     </div>
   </div>
@@ -549,6 +581,9 @@ const GAME = {
   boxPositions: [],
   marioWorldX: 60,
   cameraX: 0,
+  marioY: 0,
+  marioVY: 0,
+  onGround: true,
   speed: 2.8,
   questionActive: false,
   jumping: false,
@@ -558,14 +593,19 @@ const GAME = {
   correctFlags: new Array(20).fill(false),
   hearts: [],
   heartsCollected: 0,
-  heartsSpawned: 0
+  heartsSpawned: 0,
+  hintTimeout1: null,
+  hintTimeout2: null
 };
 
 const MARIO_SCREEN_X = 60;
 const MARIO_WIDTH = 56;
+const MARIO_HEIGHT = 80;
 const BOX_SIZE = 48;
 const BOX_SPACING = 130 * 3;
 const HEART_SIZE = 40;
+const GRAVITY = 0.9;
+const JUMP_VELOCITY = 14;
 
 /* ============================================================
    ELEMENTS
@@ -575,6 +615,7 @@ const wrap = $('game-wrap');
 const camera = $('camera');
 const boxesLayer = $('boxes-layer');
 const heartsLayer = $('hearts-layer');
+const marioWrap = $('mario-wrap');
 const marioEl = $('mario');
 const heartsEl = $('hearts');
 const timerBox = $('timer-box');
@@ -588,6 +629,7 @@ const startScreen = $('start-screen');
 const endScreen = $('end-screen');
 const toastEl = $('toast');
 const flashEl = $('flash');
+const tapHint = $('tap-hint');
 
 /* ============================================================
    AUDIO
@@ -659,14 +701,7 @@ function stopMusic(){
 }
 
 /* ============================================================
-   LIVES HUD  —  DIPERBAIKI
-   ------------------------------------------------------------
-   Aturan:
-   - Jumlah hati HUD = maxLives (3), selalu tampil.
-   - Hati yang "penuh" → merah terang.
-   - Hati yang "hilang" → abu-abu (broken).
-   - Saat nyawa berkurang 1, HANYA SATU hati yang berubah
-     jadi abu-abu, dengan animasi pecah.
+   LIVES HUD
    ============================================================ */
 function renderHearts(opts = {}){
   const { animateBrokenIndex = -1, animateRefillIndex = -1 } = opts;
@@ -676,7 +711,6 @@ function renderHearts(opts = {}){
     const d = document.createElement('div');
     d.className = 'heart' + (alive ? '' : ' broken');
     d.dataset.idx = i;
-    // Animasi hanya jika diminta (biar tidak dobel)
     if(i === animateBrokenIndex) d.classList.add('just-broken');
     if(i === animateRefillIndex) d.classList.add('just-refilled');
     d.innerHTML = `<svg viewBox="0 0 24 24">
@@ -686,29 +720,19 @@ function renderHearts(opts = {}){
         stroke="${alive?'#a80000':'#333'}" stroke-width="1.5"/>
     </svg>`;
     heartsEl.appendChild(d);
-    // bersihkan class animasi setelah selesai agar bisa dipicu lagi nanti
     if(i === animateBrokenIndex || i === animateRefillIndex){
-      setTimeout(()=>{
-        d.classList.remove('just-broken','just-refilled');
-      }, 800);
+      setTimeout(()=>{ d.classList.remove('just-broken','just-refilled'); }, 800);
     }
   }
 }
-
-/* Kurangi 1 nyawa — animasi pecah tepat di hati yang hilang */
 function loseOneLife(){
   if(GAME.lives <= 0) return;
-  // Index hati yang akan pecah = posisi hati terakhir yang masih hidup
   const brokenIdx = GAME.lives - 1;
   GAME.lives -= 1;
-  // Render ulang seluruh HUD, tapi animasikan HANYA hati brokenIdx
   renderHearts({ animateBrokenIndex: brokenIdx });
 }
-
-/* Tambah 1 nyawa — animasi isi ulang tepat di hati yang baru hidup */
 function gainOneLife(){
   if(GAME.lives >= GAME.maxLives) return;
-  // Index hati baru = posisi setelah hati terakhir yang hidup
   const refillIdx = GAME.lives;
   GAME.lives += 1;
   renderHearts({ animateRefillIndex: refillIdx });
@@ -742,19 +766,21 @@ function buildFloatingHearts(){
   GAME.heartsSpawned = 0;
 
   const heartAfterBox = [2, 5, 8, 11, 14, 17];
+  const heights = [70, 180, 200, 85, 190, 175];
+
   heartAfterBox.forEach((boxIdx, i) => {
     const boxX = GAME.boxPositions[boxIdx];
     const heartX = boxX + BOX_SPACING * 0.55;
-    const heights = [70, 120, 90, 140, 80, 110];
     const heartY = heights[i % heights.length];
+    const isHigh = heartY > 140;
 
     const el = document.createElement('div');
-    el.className = 'life-heart';
+    el.className = 'life-heart' + (isHigh ? ' high' : '');
     el.style.left = heartX + 'px';
-    el.style.bottom = heartY + 'px';
+    el.style.bottom = (80 + heartY) + 'px';
     el.dataset.worldX = heartX;
     el.dataset.worldY = heartY;
-    el.dataset.collected = 'false';
+    el.dataset.high = isHigh ? '1' : '0';
     el.innerHTML = `<svg viewBox="0 0 24 24">
       <defs>
         <radialGradient id="heartGrad${i}" cx="35%" cy="30%" r="75%">
@@ -769,33 +795,39 @@ function buildFloatingHearts(){
     </svg>`;
     heartsLayer.appendChild(el);
 
-    GAME.hearts.push({ el, worldX: heartX, worldY: heartY, collected: false, index: i });
+    GAME.hearts.push({
+      el, worldX: heartX, worldY: heartY,
+      collected: false, index: i, isHigh
+    });
     GAME.heartsSpawned++;
   });
 }
 
 /* ============================================================
-   CAMERA
+   CAMERA + MARIO Y
    ============================================================ */
 function updateCamera(){
   GAME.cameraX = GAME.marioWorldX - MARIO_SCREEN_X;
   camera.style.transform = `translateX(${-GAME.cameraX}px)`;
 }
+function updateMarioY(){
+  marioWrap.style.transform = `translateY(${-GAME.marioY}px)`;
+}
 
 /* ============================================================
    PARTIKEL
    ============================================================ */
-function spawnPopParticles(worldX, color){
+function spawnPopParticles(worldX, worldY, color){
   const symbols = color === 'heart' ? ['💖','💕','❤️','✨'] : ['✨','⭐','💫'];
   for(let i=0;i<6;i++){
     const p = document.createElement('div');
     p.className = 'pop-particle';
     p.textContent = symbols[Math.floor(Math.random()*symbols.length)];
     p.style.left = (worldX + 12) + 'px';
-    p.style.bottom = '120px';
+    p.style.bottom = (80 + (worldY || 20)) + 'px';
     p.style.setProperty('--dx', (Math.random()-0.5)*80 + 'px');
     p.style.setProperty('--dy', -(40 + Math.random()*60) + 'px');
-    boxesLayer.appendChild(p);
+    heartsLayer.appendChild(p);
     setTimeout(()=>p.remove(), 650);
   }
 }
@@ -804,7 +836,7 @@ function spawnPlusOne(worldX, worldY){
   el.className = 'plus-one';
   el.textContent = '+1 ❤️';
   el.style.left = (worldX + 8) + 'px';
-  el.style.bottom = (worldY + 40) + 'px';
+  el.style.bottom = (80 + worldY + 40) + 'px';
   heartsLayer.appendChild(el);
   setTimeout(()=>el.remove(), 1100);
 }
@@ -822,6 +854,21 @@ function loop(ts){
   if(!GAME.questionActive && !GAME.jumping){
     GAME.marioWorldX += GAME.speed * dt;
     updateCamera();
+
+    if(!GAME.onGround || GAME.marioVY !== 0){
+      GAME.marioY += GAME.marioVY * dt;
+      GAME.marioVY -= GRAVITY * dt;
+      if(GAME.marioY <= 0){
+        GAME.marioY = 0;
+        GAME.marioVY = 0;
+        GAME.onGround = true;
+        marioEl.classList.remove('airborne');
+        if(!GAME.jumping) marioEl.classList.add('walking');
+      }
+      updateMarioY();
+    }
+
+    maybeAutoJumpForHeart();
     checkHeartCollision();
 
     const idx = GAME.currentQ;
@@ -838,23 +885,50 @@ function loop(ts){
 }
 
 /* ============================================================
-   CEK TABRAKAN DENGAN NYAWA MELAYANG
+   LOMPAT
+   ============================================================ */
+function tryJump(){
+  if(!GAME.running) return;
+  if(GAME.questionActive) return;
+  if(GAME.jumping) return;
+  if(!GAME.onGround) return;
+  GAME.onGround = false;
+  GAME.marioVY = JUMP_VELOCITY;
+  marioEl.classList.remove('walking');
+  marioEl.classList.add('airborne');
+  sfxJump();
+}
+
+function maybeAutoJumpForHeart(){
+  if(!GAME.onGround) return;
+  if(GAME.jumping) return;
+  const marioRight = GAME.marioWorldX + MARIO_WIDTH;
+  GAME.hearts.forEach(h => {
+    if(h.collected) return;
+    if(!h.isHigh) return;
+    const dist = h.worldX - marioRight;
+    if(dist > 40 && dist < 130) tryJump();
+  });
+}
+
+/* ============================================================
+   TABRAKAN NYAWA
    ============================================================ */
 function checkHeartCollision(){
   const marioLeft = GAME.marioWorldX;
   const marioRight = GAME.marioWorldX + MARIO_WIDTH;
-  const marioTop = 80;
-  const marioBottom = 80 + 80;
+  const marioBottom = GAME.marioY;
+  const marioTop = GAME.marioY + MARIO_HEIGHT;
 
   GAME.hearts.forEach(h => {
     if(h.collected) return;
     const hLeft = h.worldX;
     const hRight = h.worldX + HEART_SIZE;
-    const hBottom = 80 + h.worldY;
-    const hTop = hBottom + HEART_SIZE;
+    const hBottom = h.worldY;
+    const hTop = h.worldY + HEART_SIZE;
 
     const overlapX = marioRight > hLeft && marioLeft < hRight;
-    const overlapY = marioBottom > hBottom && marioTop < hTop;
+    const overlapY = marioTop > hBottom && marioBottom < hTop;
 
     if(overlapX && overlapY) collectHeart(h);
   });
@@ -866,7 +940,7 @@ function collectHeart(h){
   GAME.heartsCollected++;
 
   if(GAME.lives < GAME.maxLives){
-    gainOneLife();  // ← pakai fungsi baru, animasi refill yang benar
+    gainOneLife();
     sfxLifeUp();
     spawnPlusOne(h.worldX, h.worldY);
     showToast('❤️ +1 NYAWA!', false, 'heart');
@@ -877,16 +951,16 @@ function collectHeart(h){
     spawnPlusOne(h.worldX, h.worldY);
     showToast('❤️ NYAWA PENUH!', false, 'heart');
   }
-  spawnPopParticles(h.worldX, 'heart');
+  spawnPopParticles(h.worldX, h.worldY, 'heart');
 }
 
 /* ============================================================
-   JUMP + STOMP
+   LOMPAT KE KOTAK SOAL
    ============================================================ */
 function startJumpAndStomp(idx){
   GAME.jumping = true;
   GAME.questionActive = true;
-  marioEl.classList.remove('walking');
+  marioEl.classList.remove('walking','airborne');
   marioEl.classList.add('jumping');
   sfxJump();
 
@@ -901,7 +975,6 @@ function startJumpAndStomp(idx){
     const t = Math.min(1, (now - jumpStartTime) / jumpDuration);
     GAME.marioWorldX = startX + (targetX - startX) * t;
     updateCamera();
-    checkHeartCollision();
     if(t < 1) requestAnimationFrame(animateJump);
   }
   requestAnimationFrame(animateJump);
@@ -914,7 +987,7 @@ function startJumpAndStomp(idx){
 
     const box = document.getElementById('box-'+idx);
     if(box) box.classList.add('stomped');
-    spawnPopParticles(boxWorldX);
+    spawnPopParticles(boxWorldX, 20);
 
     camera.style.transition = 'transform .08s';
     camera.style.transform = `translateX(${-GAME.cameraX}px) translateY(4px)`;
@@ -994,11 +1067,8 @@ function answerQuestion(idx, chosen, btnEl){
     feedbackEl.className = 'feedback no';
     sfxWrong();
 
-    // ⬇⬇⬇ PERBAIKAN UTAMA ⬇⬇⬇
-    // HANYA kurangi SATU nyawa per jawaban salah.
-    loseOneLife();          // animasi pecah di hati yang tepat
+    loseOneLife();
     sfxHeart();
-    // ⬆⬆⬆ PERBAIKAN UTAMA ⬆⬆⬆
 
     marioEl.classList.add('hurt');
     setTimeout(()=>marioEl.classList.remove('hurt'), 500);
@@ -1016,6 +1086,10 @@ function answerQuestion(idx, chosen, btnEl){
 
     if(GAME.lives <= 0){ endGame(false); return; }
     if(GAME.currentQ >= GAME.totalQ){ endGame(true); return; }
+
+    GAME.marioY = 0; GAME.marioVY = 0; GAME.onGround = true;
+    updateMarioY();
+    marioEl.classList.remove('airborne');
     marioEl.classList.add('walking');
   }, 1400);
 }
@@ -1032,6 +1106,33 @@ function showToast(text, isBad, variant){
 }
 
 /* ============================================================
+   PETUNJUK TAP — hanya muncul di awal
+   ============================================================ */
+function showTapHintOnce(){
+  // Bersihkan dulu jika ada timeout yang belum jalan
+  if(GAME.hintTimeout1) clearTimeout(GAME.hintTimeout1);
+  if(GAME.hintTimeout2) clearTimeout(GAME.hintTimeout2);
+
+  tapHint.classList.remove('hide');
+  tapHint.classList.add('show');
+
+  // Hilang otomatis setelah 4 detik
+  GAME.hintTimeout1 = setTimeout(()=>{
+    tapHint.classList.add('hide');
+    // setelah transisi selesai, hapus class show agar tidak ikut animasi bounce
+    GAME.hintTimeout2 = setTimeout(()=>{
+      tapHint.classList.remove('show','hide');
+    }, 500);
+  }, 4000);
+}
+function hideTapHint(){
+  if(GAME.hintTimeout1) clearTimeout(GAME.hintTimeout1);
+  if(GAME.hintTimeout2) clearTimeout(GAME.hintTimeout2);
+  tapHint.classList.add('hide');
+  tapHint.classList.remove('show');
+}
+
+/* ============================================================
    START / END / RESET
    ============================================================ */
 function resetGame(){
@@ -1041,14 +1142,18 @@ function resetGame(){
   GAME.timeLeft = GAME.timeLimit;
   GAME.marioWorldX = 60;
   GAME.cameraX = 0;
+  GAME.marioY = 0;
+  GAME.marioVY = 0;
+  GAME.onGround = true;
   GAME.questionActive = false;
   GAME.jumping = false;
   GAME.running = false;
   GAME.answeredFlags = new Array(20).fill(false);
   GAME.correctFlags = new Array(20).fill(false);
 
-  marioEl.classList.remove('walking','jumping','stomp','hurt');
-  renderHearts();  // render awal: 3 hati merah penuh
+  marioEl.classList.remove('walking','jumping','stomp','hurt','airborne');
+  updateMarioY();
+  renderHearts();
   scoreBox.textContent = `⭐ 0/${GAME.totalQ}`;
   timerBox.textContent = '⏱ ' + GAME.timeLimit;
   timerBox.classList.remove('warn');
@@ -1058,6 +1163,9 @@ function resetGame(){
   qmodal.classList.remove('show');
   endScreen.classList.remove('show');
   startScreen.classList.remove('hide');
+
+  // Pastikan hint benar-benar tersembunyi saat di menu awal
+  hideTapHint();
 }
 
 function startGame(){
@@ -1072,6 +1180,9 @@ function startGame(){
   startMusic();
   lastTs = performance.now();
   GAME.animId = requestAnimationFrame(loop);
+
+  // ===== TAMPILKAN PETUNJUK TAP HANYA DI AWAL GAME =====
+  showTapHintOnce();
 }
 
 function endGame(finishedAll){
@@ -1079,8 +1190,11 @@ function endGame(finishedAll){
   GAME.running = false;
   stopTimer();
   stopMusic();
-  marioEl.classList.remove('walking','jumping','stomp','hurt');
+  marioEl.classList.remove('walking','jumping','stomp','hurt','airborne');
   cancelAnimationFrame(GAME.animId);
+
+  // Sembunyikan hint saat game selesai (biar tidak nyangkut)
+  hideTapHint();
 
   const totalCorrect = GAME.score;
   let stars = 1;
@@ -1161,6 +1275,21 @@ $('btn-restart').addEventListener('click', ()=>{
   GAME.running = false;
   stopTimer();
   stopMusic();
+  hideTapHint();
+});
+
+wrap.addEventListener('pointerdown', (e)=>{
+  if(qmodal.classList.contains('show')) return;
+  if(!GAME.running) return;
+  if(e.target.closest('#start-screen') || e.target.closest('#end-screen')) return;
+  tryJump();
+});
+
+document.addEventListener('keydown', (e)=>{
+  if(e.code === 'Space' || e.code === 'ArrowUp'){
+    e.preventDefault();
+    tryJump();
+  }
 });
 
 resetGame();
